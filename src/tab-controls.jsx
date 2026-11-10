@@ -18,8 +18,10 @@ export function menuPosition(event) {
   return { anchor, x: rect.left, y: rect.bottom + 4 }
 }
 
-export function TabStrip({ label, tabs, active, onSelect, onClose, onMenu, onPreview, onPreviewEnd, className }) {
+export function TabStrip({ label, tabs, active, layout, onSelect, onDoubleClick, onClose, onMenu, onPreview, onPreviewEnd, className }) {
   const strip = useRef(null)
+  const selectionTimer = useRef(null)
+  const pointerAnchor = useRef(null)
 
   useEffect(() => {
     const element = strip.current
@@ -34,19 +36,85 @@ export function TabStrip({ label, tabs, active, onSelect, onClose, onMenu, onPre
 
   useLayoutEffect(() => {
     const element = strip.current
-    function reveal() {
-      const tab = element.querySelector('.selected')?.getBoundingClientRect()
-      if (!tab) return
+    const sessionStrip = className === 'session-tabs'
+    let scrollTimer
+
+    function updateSessionEdges() {
       const track = element.getBoundingClientRect()
       const inset = Number.parseFloat(getComputedStyle(element).scrollPaddingInlineStart) || 0
-      if (tab.left < track.left + inset) element.scrollLeft += tab.left - track.left - inset
-      else if (tab.right > track.right - inset) element.scrollLeft += tab.right - track.right + inset
+      for (const tab of element.children) {
+        const bounds = tab.getBoundingClientRect()
+        tab.toggleAttribute('data-clipped', bounds.left < track.left + inset - 1 || bounds.right > track.right - inset + 1)
+      }
+    }
+
+    function onSessionScroll() {
+      updateSessionEdges()
+      clearTimeout(scrollTimer)
+      if (pointerAnchor.current) return
+      scrollTimer = setTimeout(() => {
+        const first = element.firstElementChild
+        if (!first) return
+        const gap = Number.parseFloat(getComputedStyle(element).columnGap) || 0
+        const stride = first.getBoundingClientRect().width + gap
+        if (!stride) return
+        const snapped = Math.round(element.scrollLeft / stride) * stride
+        if (Math.abs(snapped - element.scrollLeft) > 1) element.scrollLeft = snapped
+      }, 140)
+    }
+
+    function reveal() {
+      const inset = Number.parseFloat(getComputedStyle(element).scrollPaddingInlineStart) || 0
+      if (sessionStrip) {
+        // Fit whole compact tabs between the two corner insets.
+        const width = Math.max(0, element.clientWidth - 2 * inset)
+        const slots = Math.max(1, Math.floor((width + inset) / (83 + inset)))
+        element.style.setProperty('--session-tab-width', (width - (slots - 1) * inset) / slots + 'px')
+      }
+      const selected = element.querySelector('.selected > [role="tab"]')
+      if (pointerAnchor.current?.button !== selected) {
+        pointerAnchor.current = null
+        element.style.removeProperty('--tab-offset')
+        element.style.removeProperty('--tab-scroll-extension')
+      }
+      if (!selected) {
+        if (sessionStrip) updateSessionEdges()
+        return
+      }
+      const tab = selected.parentElement.getBoundingClientRect()
+      const track = element.getBoundingClientRect()
+      const anchor = pointerAnchor.current
+      if (anchor) {
+        const button = selected.getBoundingClientRect()
+        const shift = Number.parseFloat(element.style.getPropertyValue('--tab-offset')) || 0
+        const naturalLeft = tab.left + element.scrollLeft - shift
+        const clickOffset = Math.min(anchor.offset, Math.max(0, button.right - tab.left - 3))
+        const minLeft = track.left + inset
+        const maxLeft = track.right - inset - tab.width
+        const left = Math.max(minLeft, Math.min(anchor.x - clickOffset, maxLeft))
+        // Add room on either side when the new strip would otherwise clamp
+        // the scroll position before the clicked tab reaches its anchor.
+        const scroll = Math.max(0, naturalLeft - left)
+        element.style.setProperty('--tab-offset', Math.max(0, left - naturalLeft) + 'px')
+        element.style.setProperty('--tab-scroll-extension', Math.ceil(scroll) + 'px')
+        element.scrollLeft = scroll
+      } else {
+        if (tab.left < track.left + inset) element.scrollLeft += tab.left - track.left - inset
+        else if (tab.right > track.right - inset) element.scrollLeft += tab.right - track.right + inset
+      }
+      if (sessionStrip) updateSessionEdges()
     }
     reveal()
     const observer = new ResizeObserver(reveal)
     observer.observe(element)
-    return () => observer.disconnect()
-  }, [active, tabs.length])
+    if (sessionStrip) element.addEventListener('scroll', onSessionScroll, { passive: true })
+    return () => {
+      observer.disconnect()
+      element.removeEventListener('scroll', onSessionScroll)
+      clearTimeout(scrollTimer)
+      clearTimeout(selectionTimer.current)
+    }
+  }, [active, tabs.length, layout, className])
 
   function onKeyDown(event, id) {
     if (menuShortcut(event)) return onMenu(event, id)
@@ -62,13 +130,27 @@ export function TabStrip({ label, tabs, active, onSelect, onClose, onMenu, onPre
   }
 
   return <div className={'tab-strip ' + className} ref={strip} role="tablist" aria-label={label} onScroll={onPreviewEnd}>
-    {tabs.map(({ id, title, icon, chat }) => <div className={'workbench-tab ' + (id === active ? 'selected' : '')} key={id}
+    {tabs.map(({ id, title, icon, chat, marker, deferSelect }) => <div className={'workbench-tab ' + (id === active ? 'selected' : '')} key={id}
       onContextMenu={event => onMenu(event, id)}
       onPointerEnter={onPreview ? event => onPreview(event, id) : undefined} onPointerLeave={onPreviewEnd}>
-      <button role="tab" title={title} aria-label={title} aria-description={chat ? describeChat(chat) : undefined}
-        aria-selected={id === active} onClick={() => onSelect(id)}
+      <button role="tab" title={title} aria-label={title} aria-description={chat ? describeChat(chat, marker) : undefined}
+        aria-selected={id === active} onClick={event => {
+          clearTimeout(selectionTimer.current)
+          if (onDoubleClick && event.detail > 1) return
+          // Keep the tab under the pointer when selecting it would change the pane layout.
+          if (event.detail === 1 && (deferSelect || (pointerAnchor.current && id !== active))) {
+            selectionTimer.current = setTimeout(() => onSelect(id), 300)
+          }
+          else onSelect(id)
+        }}
+        onDoubleClick={onDoubleClick && (event => {
+          clearTimeout(selectionTimer.current)
+          const button = event.currentTarget
+          pointerAnchor.current = { button, x: event.clientX, offset: event.clientX - button.parentElement.getBoundingClientRect().left }
+          onDoubleClick(id)
+        })}
         onKeyDown={event => onKeyDown(event, id)}>
-        {chat ? <ConversationMarker marker={chat.marker} /> : <Icon name={icon} size={15} />}
+        {chat ? <ConversationMarker marker={marker} /> : <Icon name={icon} size={15} />}
         <span className="tab-name">{title}</span>
         {chat && <ConversationStatus chat={chat} />}
       </button>

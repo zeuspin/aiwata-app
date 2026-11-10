@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
+import { ConversationMarker } from './conversation-meta.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
+import { botHandle } from './room.mjs'
 import {
   approvalModes, attachmentSizeLimit, commands, getApprovalMode, getModel, getTrigger,
   models, parseSlash, referenceKinds, referenceText, replaceTrigger, sources,
@@ -9,8 +11,9 @@ import './composer.css'
 
 export { sources } from './composer.mjs'
 
-export function Composer({ chat, project, compact, api, refresh, send, stop, report, assets, onCommand, onAttachmentPreview }) {
+export function Composer({ chat, project, projectPicker, bot, group, members, onClearReply, autoFocus, compact, api, refresh, send, stop, report, assets, onCommand, onAttachmentPreview }) {
   const [menu, setMenu] = useState('')
+  const [projectSearch, setProjectSearch] = useState('')
   const [voice, setVoice] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [caret, setCaret] = useState(chat.draft.length)
@@ -20,6 +23,7 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   const root = useRef(null)
   const area = useRef(null)
   const picker = useRef(null)
+  const projectSearchInput = useRef(null)
   const button = useRef(null)
   const recording = useRef(null)
   const dragDepth = useRef(0)
@@ -31,7 +35,7 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   const trigger = focused && !voice && !menu && getTrigger(chat.draft, caret)
   const triggerKey = trigger ? JSON.stringify([chat.draft, caret]) : ''
   const suggestions = trigger && dismissed !== triggerKey
-    ? completionItems(trigger, assets, project, onCommand)
+    ? completionItems(trigger, assets, project, onCommand, group ? members : null)
     : []
   const selected = Math.min(active, suggestions.length - 1)
 
@@ -54,6 +58,11 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   useEffect(() => {
     if (selected >= 0) document.getElementById(suggestionId + '-' + selected)?.scrollIntoView({ block: 'nearest' })
   }, [selected, suggestionId, triggerKey])
+
+  const replyTarget = chat.groupReply?.messageId
+  useEffect(() => {
+    if (replyTarget) focusArea()
+  }, [replyTarget])
 
   function focusArea(position) {
     requestAnimationFrame(() => {
@@ -79,6 +88,14 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   function toggleMenu(event, name) {
     button.current = event.currentTarget
     setMenu(menu === name ? '' : name)
+  }
+
+  function openProjectPicker(event) {
+    if (menu !== 'projects') {
+      setProjectSearch('')
+      requestAnimationFrame(() => projectSearchInput.current?.focus())
+    }
+    toggleMenu(event, 'projects')
   }
 
   function pickApproval(value) {
@@ -128,6 +145,8 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
       return
     }
     const [name, args] = parsed
+    if (group) { report('群聊不支持斜杠指令。', true); return }
+    if (bot && name === 'model') { report('请在 Bot 设置中更改此 Bot 的模型。'); return }
     if (name === 'help') {
       setDraft('/')
       focusArea(1)
@@ -162,7 +181,7 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   }
 
   function addAttachments(entries) {
-    const draft = api.current()?.chats[chat.id]
+    const draft = api.getChat(chat.id)
     if (!draft) return
     const names = [...draft.attachments]
     const details = Object.assign(Object.create(null), draft.attachmentDetails)
@@ -189,7 +208,7 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
     if (!files.length) return
     setMenu('')
     const result = await api.addLocalAttachments(chat.id, Array.from(files))
-    if (result.cancelled || api.current()?.chats[chat.id] !== chat) return
+    if (result.cancelled || api.getChat(chat.id) !== chat) return
     if (!result.ok) return report('无法保存本地附件，请检查浏览器存储后重试', true)
     refresh()
     if (result.tooLarge) report('单个附件最多 16 MiB', true)
@@ -268,7 +287,7 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
       // The future Hermes /api/audio/transcribe adapter takes the audio and returns { transcript }.
       job.timer = setTimeout(() => {
         const transcript = '请把这一轮工作整理成清单。'
-        const prior = api.current()?.chats[chat.id]?.draft
+        const prior = api.getChat(chat.id)?.draft
         if (prior !== undefined) setDraft([prior, transcript].filter(Boolean).join('\n'))
         finishVoice(job)
         report('已插入模拟转写，请检查后发送')
@@ -325,9 +344,37 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   return <div className={'composer-wrap ' + (compact ? 'compact' : '')} ref={root}
     onKeyDown={onComposerKey}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setFocused(false); setMenu('') } }}>
-    {!compact && !chat.messages.length && <div className="composer-context">
-      <span><Icon name="folder" size={15} />{project?.name ?? '独立会话'}</span>
+    {!group && !bot && !compact && !chat.messages.length && <div className="composer-context">
+      {projectPicker ? <button type="button" className="control-text composer-project-trigger" aria-label="选择项目"
+        aria-expanded={menu === 'projects'} onClick={openProjectPicker}>
+        {project ? <ConversationMarker marker={project.marker} /> : <Icon name="folder" size={15} />}
+        <span>{project?.name ?? '独立会话'}</span><Icon name="chevron" size={13} />
+      </button> : <span><Icon name="folder" size={15} />{project?.name ?? '独立会话'}</span>}
       <span><Icon name="laptop" size={15} />此计算机</span>
+      {projectPicker && menu === 'projects' && <section className="popover composer-menu project-select-menu" aria-label="项目选项">
+        <label className="project-select-search"><Icon name="search" size={15} />
+          <input ref={projectSearchInput} aria-label="搜索项目" placeholder="搜索项目" value={projectSearch}
+            onChange={event => setProjectSearch(event.target.value)} />
+        </label>
+        {projectPicker.projects.filter(item => item.name.toLowerCase().includes(projectSearch.trim().toLowerCase())).map(item =>
+          <button key={item.id} type="button" className="menu-row" aria-pressed={item.id === project?.id} onClick={() => {
+            projectPicker.select(item.id)
+            setMenu('')
+            focusArea()
+          }}>
+            <ConversationMarker marker={item.marker} /><span>{item.name}</span>
+            {item.id === project?.id && <Icon name="check" size={15} />}
+          </button>)}
+        <div className="menu-divider" />
+        <button className="menu-row" type="button" onClick={() => { projectPicker.create(); setMenu('') }}>
+          <Icon name="add" size={15} />新建项目
+        </button>
+        <button className="menu-row" type="button" aria-pressed={!project} onClick={() => {
+          projectPicker.select(null)
+          setMenu('')
+          focusArea()
+        }}><Icon name="close" size={15} />不在项目中工作</button>
+      </section>}
     </div>}
     <form className={'composer' + (dragging ? ' composer-dragging' : '')} onSubmit={event => { event.preventDefault(); submit() }}
       onDragEnter={event => {
@@ -368,6 +415,10 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
             <IconButton icon="check" label="完成录音" disabled={voice.phase !== 'recording'} onClick={transcribe} />
           </div>
         : <>
+            {group && chat.groupReply && <div className="room-quote-draft">
+              <blockquote className="room-quote"><strong>回复 {chat.groupReply.author}</strong><span>{chat.groupReply.text}</span></blockquote>
+              <IconButton icon="close" label="取消引用回复" onClick={() => { onClearReply(); focusArea() }} />
+            </div>}
             {!!chat.attachments.length && <div className="attachment-list">{chat.attachments.map(name => {
               const entry = Object.hasOwn(chat.attachmentDetails ?? {}, name) ? chat.attachmentDetails[name] : null
               const size = entry?.size === undefined ? '' : ' · ' + formatFileSize(entry.size)
@@ -379,13 +430,16 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
                 <button type="button" aria-label={'移除附件 ' + name} onClick={() => removeAttachment(name)}><Icon name="close" size={12} /></button>
               </div>
             })}</div>}
-            <textarea ref={area} aria-label="Agent 输入框" rows={compact ? Math.min(chat.draft.split('\n').length, 4) : 2}
+            <textarea ref={area} autoFocus={autoFocus} aria-label={group ? '群聊消息' : 'Agent 输入框'} rows={compact ? Math.min(chat.draft.split('\n').length, 4) : 2}
               aria-autocomplete="list" aria-controls={suggestions.length ? suggestionId : undefined}
               aria-activedescendant={suggestions.length ? suggestionId + '-' + selected : undefined}
-              value={chat.draft} placeholder={chat.pending ? '添加下一条消息' : '和 AIWATA 一起工作'}
+              value={chat.draft} placeholder={chat.pending ? '添加下一条消息' : group ? '输入消息，或用 @ 指定成员' : bot ? '给' + bot.name + '发消息' : '和 AIWATA 一起工作'}
               onFocus={event => { setFocused(true); setCaret(event.currentTarget.selectionStart) }}
               onBlur={() => setFocused(false)}
-              onSelect={event => { setCaret(event.currentTarget.selectionStart); setActive(0) }}
+              onSelect={event => {
+                const position = event.currentTarget.selectionStart
+                if (position !== caret) { setCaret(position); setActive(0) }
+              }}
               onChange={event => setDraft(event.target.value, event.target.selectionStart)}
               onKeyDown={onTextareaKey}
               onPaste={event => {
@@ -396,26 +450,27 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
             <div className="composer-toolbar">
               <div className="composer-actions">
                 <IconButton icon="add" label="添加素材" aria-expanded={menu === 'attachments'} onClick={event => toggleMenu(event, 'attachments')} />
-                <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
+                {group ? <button type="button" className="control-text" aria-label="提及群成员" onClick={() => insertStarter('@')}>@</button>
+                : <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
                   aria-label="Agent 批准方式" title={mode.label} aria-expanded={menu === 'permission'} onClick={event => toggleMenu(event, 'permission')}>
                   <Icon name="shield" size={15} /><span>{mode.label}</span>
-                </button>
+                </button>}
               </div>
               <div className="composer-actions">
-                <button type="button" className="control-text composer-model" aria-label="模型与用量来源" title={model.label + ' · ' + model.description}
+                {!group && !bot && <button type="button" className="control-text composer-model" aria-label="模型与用量来源" title={model.label + ' · ' + model.description}
                   aria-expanded={menu === 'source'} onClick={event => toggleMenu(event, 'source')}>
                   <span>{model.label}</span><Icon name="chevron" size={14} />
-                </button>
+                </button>}
                 <IconButton icon="mic" label="语音输入" onClick={beginVoice} />
-                {chat.pending && <IconButton icon="stop" label="停止生成" onClick={stop} />}
+                {chat.pending && !chat.agentRun?.room?.paused && <IconButton icon="stop" label={group ? '停止讨论' : '停止生成'} onClick={stop} />}
                 <button type="submit" className="send-button" aria-label={chat.pending ? '排队发送消息' : '发送消息'}
                   disabled={!canSend}><Icon name="send" /></button>
               </div>
             </div>
           </>}
       {!!suggestions.length && <div className="popover composer-menu composer-suggestions" id={suggestionId} role="listbox"
-        aria-label={trigger.kind === '/' ? '斜杠指令' : '上下文引用'}>
-        <div className="popover-caption" aria-hidden="true">{trigger.kind === '/' ? '斜杠指令' : '上下文引用'} <span>↑ ↓ 选择 · ↵ 插入</span></div>
+        aria-label={group ? '群成员建议' : trigger.kind === '/' ? '斜杠指令' : '上下文引用'}>
+        <div className="popover-caption" aria-hidden="true">{group ? '提及成员' : trigger.kind === '/' ? '斜杠指令' : '上下文引用'} <span>↑ ↓ 选择 · ↵ 插入</span></div>
         {suggestions.map((item, index) => <button type="button" className="menu-row menu-option" role="option" tabIndex={-1}
           id={suggestionId + '-' + index} key={item.insert} aria-selected={index === selected}
           onPointerMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => insertSuggestion(item)}>
@@ -444,10 +499,10 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
         <button className="menu-row" type="button" onClick={() => picker.current?.click()}>
           <Icon name="attach" size={15} />选择本地文件
         </button>
-        <button className="menu-row" type="button" onClick={() => insertStarter('@')}><span className="composer-menu-symbol">@</span>引用上下文</button>
-        <button className="menu-row" type="button" disabled={!canStartCommand} onClick={() => insertStarter('/')}>
+        {!group && <button className="menu-row" type="button" onClick={() => insertStarter('@')}><span className="composer-menu-symbol">@</span>引用上下文</button>}
+        {!group && <button className="menu-row" type="button" disabled={!canStartCommand} onClick={() => insertStarter('/')}>
           <span className="composer-menu-symbol">/</span>斜杠指令
-        </button>
+        </button>}
         {!!assets.length && <>
           <div className="popover-caption">从素材库添加</div>
           {assets.slice(0, 5).map(name => <button className="menu-row" type="button" key={name}
@@ -458,8 +513,11 @@ export function Composer({ chat, project, compact, api, refresh, send, stop, rep
   </div>
 }
 
-function completionItems(trigger, assets, project, onCommand) {
+function completionItems(trigger, assets, project, onCommand, members) {
   const query = trigger.query.toLowerCase()
+  if (members) return trigger.kind === '@' ? members
+    .filter(bot => bot.name.toLowerCase().includes(query) || botHandle(bot).toLowerCase().startsWith(query))
+    .map(bot => ({ label: bot.name, insert: '@' + botHandle(bot), description: '@' + botHandle(bot), icon: 'bot', complete: true })) : []
   if (trigger.kind === '/') {
     return commands.filter(command => (onCommand || ['help', 'model', 'approvals'].includes(command.name))
       && (command.name.startsWith(query) || command.description.includes(query)))

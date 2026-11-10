@@ -29,6 +29,19 @@
   overscroll-behavior-y: contain;
 }
 .composer .composer-model-menu { width: min(326px, calc(100% - 12px)); }
+.composer-context:has(.composer-project-trigger) { position: relative; }
+.composer-project-trigger { border-radius: 8px; }
+.composer-project-trigger > span:not(.conversation-marker) { min-width: 0; }
+.project-select-menu { width: min(280px, 100%); max-height: min(50dvh, 340px); overflow: auto; }
+.project-select-search {
+  display: flex; align-items: center; gap: 7px; margin: 1px 3px 4px; padding: 6px;
+  color: var(--muted); border-bottom: 1px solid var(--line);
+}
+.project-select-search input { flex: 1; border: 0; background: transparent; }
+.project-select-menu .menu-row > span:not(.conversation-marker) {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-select-menu .menu-row[aria-pressed="true"] { background: var(--selected); }
 .composer-menu-section + .composer-menu-section { border-top: 1px solid var(--line); margin-top: 3px; }
 .composer-menu-section > .popover-caption,
 .composer-suggestions > .popover-caption { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 8px; }

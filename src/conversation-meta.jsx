@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { IconButton } from './icons.jsx'
+import React, { useId, useRef, useState } from 'react'
 import { conversationStatus, markerColors, markerDetails, markerEmojis, showsRunningArc, statusLabels } from './conversation-meta.mjs'
+import { Icon } from './icons.jsx'
 
-export function describeChat(chat) {
-  const [, marker] = markerDetails(chat.marker) ?? []
+export function describeChat(chat, projectMarker) {
+  const [, marker] = markerDetails(projectMarker) ?? []
   const status = statusLabels[conversationStatus(chat)]
   return [marker && '标记：' + marker, '状态：' + status].filter(Boolean).join('，')
 }
@@ -24,46 +24,46 @@ export function ConversationMarker({ marker }) {
     : <span className="conversation-marker emoji-marker" title={label} aria-hidden="true">{value}</span>
 }
 
-export function MarkerDialog({ title, marker, onClose, onSave }) {
-  const dialog = useRef(null)
-  const [selection, setSelection] = useState(marker ?? null)
+export function ProjectMarkerPicker({ title, marker, onSave, label = '更换标记 · ' + title, emptyIcon, triggerText }) {
+  const id = useId()
+  const trigger = useRef(null)
+  const picker = useRef(null)
   const [saveFailed, setSaveFailed] = useState(false)
-
-  useEffect(() => {
-    dialog.current.showModal()
-  }, [])
-
-  function choose(next) {
-    setSelection(next)
-    setSaveFailed(false)
-  }
+  const [, currentLabel] = markerDetails(marker) ?? []
 
   function choice(kind, value, label) {
-    const selected = selection?.kind === kind && selection.value === value
+    const selected = marker?.kind === kind && marker.value === value
     return <button key={value} className="marker-choice" type="button"
-      aria-label={label} aria-pressed={selected} title={label} onClick={() => choose({ kind, value })}>
+      aria-label={label} aria-pressed={selected} title={label} onClick={() => {
+        if (!onSave({ kind, value })) {
+          setSaveFailed(true)
+          return
+        }
+        picker.current.hidePopover()
+        trigger.current.focus()
+      }}>
       <ConversationMarker marker={{ kind, value }} />
     </button>
   }
 
-  return <dialog ref={dialog} className="project-dialog marker-dialog" aria-labelledby="marker-heading" onCancel={onClose}>
-    <header>
-      <h2 id="marker-heading">会话标记</h2>
-      <IconButton icon="close" label="关闭" onClick={onClose} />
-    </header>
-    <p className="muted marker-session-title">{title}</p>
-    <div className="marker-group" role="group" aria-label="纯色标">
-      <h3>纯色标</h3>
-      <div className="marker-choices">{markerColors.map(([value, label]) => choice('color', value, label))}</div>
+  return <>
+    <button type="button" ref={trigger} className="project-marker-button" popoverTarget={id} aria-haspopup="dialog"
+      title={label} aria-label={label} aria-description={currentLabel}
+      onClick={() => setSaveFailed(false)}>
+      {!marker && emptyIcon ? <Icon name={emptyIcon} /> : <ConversationMarker marker={marker} />}
+      {triggerText && <>{triggerText}<Icon name="chevron" size={12} /></>}
+    </button>
+    <div ref={picker} id={id} popover="auto" className="popover project-marker-picker" role="dialog"
+      aria-label={'项目标记 · ' + title}>
+      <div className="marker-group" role="group" aria-label="纯色标">
+        <h3>纯色标</h3>
+        <div className="marker-choices">{markerColors.map(([value, label]) => choice('color', value, label))}</div>
+      </div>
+      <div className="marker-group" role="group" aria-label="Emoji 表情">
+        <h3>Emoji 表情</h3>
+        <div className="marker-choices">{markerEmojis.map(([value, label]) => choice('emoji', value, label))}</div>
+      </div>
+      {saveFailed && <p className="danger" role="alert">标记未能保存，请重试。</p>}
     </div>
-    <div className="marker-group" role="group" aria-label="Emoji 表情">
-      <h3>Emoji 表情</h3>
-      <div className="marker-choices">{markerEmojis.map(([value, label]) => choice('emoji', value, label))}</div>
-    </div>
-    {saveFailed && <p className="danger" role="alert">标记未能保存，请重新打开会话后再试。</p>}
-    <footer>
-      <button type="button" className="secondary" disabled={!selection} onClick={() => choose(null)}>清除标记</button>
-      <button type="button" className="primary" onClick={() => { if (!onSave(selection)) setSaveFailed(true) }}>保存标记</button>
-    </footer>
-  </dialog>
+  </>
 }

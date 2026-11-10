@@ -69,6 +69,10 @@
   padding: 10px 14px;
   border-top: 1px solid var(--line);
 }
+.project-settings-link { width: 100%; text-align: left; }
+.project-settings-link:first-child { border-top: 0; }
+.project-settings-link:hover { background: var(--hover); }
+.project-settings-link:focus-visible { outline-offset: -3px; }
 .entry-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .entry-text strong { display: block; font-size: 13px; font-weight: 600; }
 .entry-text small { display: block; font-size: 11px; margin-top: 2px; }

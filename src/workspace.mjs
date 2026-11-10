@@ -1,11 +1,12 @@
-import { markerDetails } from './conversation-meta.mjs'
+import { markerColors, markerDetails } from './conversation-meta.mjs'
+import { getBotAppearance } from './bot-appearance.mjs'
 import { accounts, createChat, seedAccount, tools } from './fixtures.mjs'
 import { closeTabs, conversationSection, insertTab } from './tabs.mjs'
 import { createMockAgent, projectAgentEvent } from './agent-session.mjs'
 import { resolveGroupMembers } from './management.mjs'
 import { emptyBrowserState, recordBrowserAction, toolEditDefaults } from './tool-surfaces.mjs'
 import { attachmentIds, hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
-import { attachmentSizeLimit } from './composer.mjs'
+import { attachmentSizeLimit, models } from './composer.mjs'
 
 export const railWidth = 50
 export const contextBreakpoint = 880
@@ -46,10 +47,10 @@ export function viewAtWidth(view, width, sidebar) {
   return view === 'split' && sidebar && width < contextBreakpoint ? 'replace' : view
 }
 
-export function setProjectChatMarker(workspace, id, marker) {
-  const chat = workspace.current()?.chats[id]
-  if (!chat?.projectId || (marker !== null && !markerDetails(marker))) return false
-  return workspace.changeChat(id, { marker })
+function defaultProjectMarker(projects) {
+  const usedColors = new Set(projects.filter(project => project.marker?.kind === 'color').map(project => project.marker.value))
+  const [value] = markerColors.find(([color]) => !usedColors.has(color)) ?? markerColors[projects.length % markerColors.length]
+  return { kind: 'color', value }
 }
 
 export function setChatArchived(workspace, id, archived) {
@@ -97,8 +98,14 @@ export function createWorkspace(storage, attachmentStore) {
     return active ? records[active] : null
   }
 
+  function getChat(id) {
+    const record = current()
+    const draft = record?.newChatDraft
+    return record?.chats[id] ?? (draft?.id === id ? draft : undefined)
+  }
+
   function changeChat(id, patch) {
-    const chat = current()?.chats[id]
+    const chat = getChat(id)
     if (!chat) return false
     const prior = attachmentStore && ['attachmentDetails', 'queue', 'messages', 'lastInput'].some(key => Object.hasOwn(patch, key))
       ? attachmentIds(chat) : null
@@ -117,7 +124,7 @@ export function createWorkspace(storage, attachmentStore) {
   async function addLocalAttachments(id, files) {
     const account = active
     const version = loginVersion
-    const chat = current()?.chats[id]
+    const chat = getChat(id)
     if (!chat || !attachmentStore) return { ok: false }
     const staged = []
     let tooLarge = false
@@ -137,7 +144,7 @@ export function createWorkspace(storage, attachmentStore) {
     } catch {
       return { ok: false }
     }
-    if (version !== loginVersion || current()?.chats[id] !== chat) {
+    if (version !== loginVersion || getChat(id) !== chat) {
       removeLocal(account, id, staged.map(item => item.id))
       return { ok: false, cancelled: true }
     }
@@ -168,9 +175,9 @@ export function createWorkspace(storage, attachmentStore) {
   async function readLocalAttachment(id, blobId) {
     const account = active
     const version = loginVersion
-    if (!current()?.chats[id] || !blobId || !attachmentStore) return null
+    if (!getChat(id) || !blobId || !attachmentStore) return null
     const file = await attachmentStore.read(account, id, blobId)
-    return version === loginVersion && current()?.chats[id] ? file ?? null : null
+    return version === loginVersion && getChat(id) ? file ?? null : null
   }
 
   function logout() {
@@ -199,6 +206,12 @@ export function createWorkspace(storage, attachmentStore) {
     if (active === id) return true
     logout()
     const record = records[id] ??= seedAccount(id)
+    for (const project of record.projects) {
+      if (!markerDetails(project.marker)) project.marker = defaultProjectMarker(record.projects)
+    }
+    for (const group of record.groups) {
+      if (!Array.isArray(group.members)) group.members = resolveGroupMembers(group, record.bots)
+    }
     const chats = Object.values(record.chats)
     for (const chat of chats) resetRun(chat)
     if (!Array.isArray(record.openChats)) {
@@ -212,7 +225,7 @@ export function createWorkspace(storage, attachmentStore) {
     return true
   }
 
-  function charge({ id, kind, source, amount }) {
+  function charge({ id, kind, source, amount }, save = true) {
     const record = current()
     if (!record) return { ok: false, reason: 'locked' }
     if (source !== 'managed') return { ok: true, charged: 0 }
@@ -222,31 +235,43 @@ export function createWorkspace(storage, attachmentStore) {
 
     record.credits -= amount
     record.usage.unshift({ id, kind, amount, timestamp: Date.now() })
-    persist()
+    if (save) persist()
     return { ok: true, charged: amount }
   }
 
   function draftInput(chat, runId, queued = false) {
-    return { runId, text: chat.draft.trim(), source: chat.source, attachments: chat.attachments,
-      attachmentDetails: chat.attachmentDetails, queued, retryDemo: chat.retryDemo === chat.draft.trim() }
+    const record = current()
+    const group = record?.groups.some(item => item.id === chat.id)
+    const bot = record?.bots.find(item => item.id === chat.id)
+    const model = bot && models.find(item => item.id === bot.model && item.provider === bot.provider)
+    const reply = group ? chat.groupReply : null
+    return { runId, text: chat.draft.trim(), source: bot ? (model?.source ?? 'managed') : chat.source, attachments: chat.attachments,
+      attachmentDetails: chat.attachmentDetails, queued, retryDemo: chat.retryDemo === chat.draft.trim(),
+      ...(group ? { threadId: reply?.threadId ?? runId, discussionId: runId, reply } : {}) }
   }
 
   function admitPrompt(id, input, patch) {
-    const chat = current()?.chats[id]
+    const record = current()
+    const chat = getChat(id)
     if (!chat || !input || !hasPromptContent(input) || chat.pending) return { ok: false, reason: 'unavailable' }
-    const result = charge({ id: input.runId, kind: 'Agent 会话', source: input.source, amount: 12 })
+    const result = charge({ id: input.runId, kind: 'Agent 会话', source: input.source, amount: 12 }, false)
     if (!result.ok) return result
+    if (record.newChatDraft === chat) {
+      record.chats[id] = chat
+      delete record.newChatDraft
+    }
     changeChat(id, {
       ...patch, pending: input.runId, agentRun: null, lastInput: input,
       activity: { ...chat.activity, needsInput: false },
       title: chat.title === '新聊天' ? (input.text || input.attachments[0]).slice(0, 24) : chat.title,
-      messages: [...chat.messages, { role: 'user', text: input.text, attachments: input.attachments, attachmentDetails: input.attachmentDetails }],
+      messages: [...chat.messages, { role: 'user', text: input.text, attachments: input.attachments, attachmentDetails: input.attachmentDetails,
+        ...(input.threadId ? { id: input.runId, threadId: input.threadId, reply: input.reply } : {}) }],
     })
     return result
   }
 
   return {
-    login, logout, current, charge, changeChat, agent, addLocalAttachments, readLocalAttachment,
+    login, logout, current, getChat, charge, changeChat, agent, addLocalAttachments, readLocalAttachment,
     updateNavigation(patch) {
       const record = current()
       if (!record) return false
@@ -292,26 +317,42 @@ export function createWorkspace(storage, attachmentStore) {
       persist()
       return true
     },
+    setProjectMarker(id, marker) {
+      const project = current()?.projects.find(item => item.id === id)
+      if (!project || !markerDetails(marker)) return false
+      project.marker = marker
+      persist()
+      return true
+    },
     removeProject(id) {
       const record = current()
       if (!record?.projects.some(project => project.id === id)) return false
       if (Object.values(record.chats).some(chat => chat.projectId === id && chat.pending)) return false
       record.projects = record.projects.filter(project => project.id !== id)
       for (const chat of Object.values(record.chats)) if (chat.projectId === id) chat.projectId = null
+      if (record.newChatDraft?.projectId === id) record.newChatDraft.projectId = null
+      if (record.lastProjectId === id) delete record.lastProjectId
       persist()
       return true
     },
-    saveBotEntity(kind, entity) {
+    saveBotEntity(kind, entity, { skills } = {}) {
       const record = current()
       if (!record || !entity?.id || !entity.name?.trim() || !['bot', 'group'].includes(kind)) return false
       const list = kind === 'bot' ? record.bots : record.groups
       const index = list.findIndex(item => item.id === entity.id)
       if (index < 0 && record.chats[entity.id]) return false
-      if (kind === 'bot' && index >= 0 && list[index].name !== entity.name) {
-        record.groups = record.groups.map(group => ({ ...group, members: resolveGroupMembers(group, list) }))
+      if (kind === 'group' && index >= 0) {
+        const roster = resolveGroupMembers(list[index], record.bots)
+        if (entity.members && (entity.members.length !== roster.length || roster.some(id => !entity.members.includes(id)))) return false
+        entity = { ...entity, members: roster }
       }
+      if (kind === 'bot' && entity.appearance) entity = { ...entity, appearance: getBotAppearance(entity) }
       if (index < 0) list.push(entity)
       else list[index] = entity
+      if (kind === 'bot' && skills) {
+        const management = record.management ?? {}
+        record.management = { ...management, skills: { ...management.skills, [entity.id]: structuredClone(skills) } }
+      }
       const chat = record.chats[entity.id] ??= createChat(entity.id, entity.name)
       chat.title = entity.name
       persist()
@@ -331,6 +372,15 @@ export function createWorkspace(storage, attachmentStore) {
       if (persist() && chat && attachmentStore) removeLocal(active, id, [...attachmentIds(chat)])
       return true
     },
+    postGroupTaskResult(id, { id: runId, name, text }) {
+      const record = current()
+      const chat = record?.chats[id]
+      if (!chat || !record.groups.some(group => group.id === id) || !runId) return false
+      const messageId = 'cron:' + runId
+      if (chat.messages.some(message => message.id === messageId)) return true
+      return changeChat(id, { unread: true, messages: [...chat.messages,
+        { id: messageId, role: 'agent', author: name, text, threadId: messageId, scheduled: true }] })
+    },
     savePanelWidth(panel, width) {
       const record = current()
       if (!record || !Object.hasOwn(initialPanels, panel) || !Number.isFinite(width) || width <= 0) return
@@ -347,7 +397,7 @@ export function createWorkspace(storage, attachmentStore) {
       return changeChat(id, { draft, retryDemo: null })
     },
     fillDemoPrompt(id, prompt) {
-      const chat = current()?.chats[id]
+      const chat = getChat(id)
       if (!chat || chat.pending || chat.draft.length) return false
       return changeChat(id, { draft: prompt, retryDemo: null })
     },
@@ -364,13 +414,34 @@ export function createWorkspace(storage, attachmentStore) {
       const patch = update({ ...toolEditDefaults, ...chat.toolEdits })
       return changeChat(id, { toolEdits: { ...chat.toolEdits, ...patch } })
     },
-    addProject(name, folder, trusted = false) {
+    addProject(name, folders, { trusted = false, marker } = {}) {
       const record = current()
-      if (!record || !name.trim() || !folder.trim()) return null
-      const project = { id: crypto.randomUUID(), name: name.trim(), folder: folder.trim(), trusted }
+      const paths = Array.isArray(folders) ? folders : [folders]
+      const [folder, ...additional] = [...new Set(paths.map(path => path?.trim()).filter(Boolean))]
+      if (!record || !name.trim() || !folder || (marker != null && !markerDetails(marker))) return null
+      const project = { id: crypto.randomUUID(), name: name.trim(), folder, trusted,
+        marker: marker ?? defaultProjectMarker(record.projects) }
       record.projects.push(project)
+      if (additional.length) {
+        const management = record.management ?? {}
+        record.management = { ...management, projectFolders: { ...management.projectFolders, [project.id]: additional } }
+      }
       persist()
       return project
+    },
+    openChatDraft(projectId) {
+      const record = current()
+      if (!record) return null
+      const previous = record.newChatDraft
+      if (previous && projectId === undefined) return previous
+      const recent = record.navigation?.modules?.projects?.chatId ?? record.activeChat
+      const candidate = projectId === undefined ? record.lastProjectId ?? record.chats[recent]?.projectId : projectId
+      const target = record.projects.some(project => project.id === candidate) ? candidate : null
+      const draft = previous ?? createChat(crypto.randomUUID(), '新聊天')
+      draft.projectId = target
+      record.newChatDraft = draft
+      persist()
+      return draft
     },
     newChat(projectId) {
       const record = current()
@@ -386,6 +457,7 @@ export function createWorkspace(storage, attachmentStore) {
       record.openChats = insertTab(record.openChats, id, after)
       record.activeChat = id
       record.chats[id].unread = false
+      if (record.chats[id].projectId) record.lastProjectId = record.chats[id].projectId
       persist()
       return true
     },
@@ -431,13 +503,31 @@ export function createWorkspace(storage, attachmentStore) {
       return changeChat(id, { toolTitles: { ...chat.toolTitles, [tool]: title.trim() } })
     },
     send(id, runId) {
-      const chat = current()?.chats[id]
-      return admitPrompt(id, chat && draftInput(chat, runId), { draft: '', retryDemo: null, attachments: [], attachmentDetails: {} })
+      const chat = getChat(id)
+      return admitPrompt(id, chat && draftInput(chat, runId), { draft: '', retryDemo: null, attachments: [], attachmentDetails: {}, groupReply: null })
+    },
+    setGroupReply(id, messageId) {
+      if (!current()?.groups.some(group => group.id === id)) return false
+      if (messageId == null) return changeChat(id, { groupReply: null })
+      const message = getChat(id)?.messages.find(item => item.id === messageId)
+      if (!message?.threadId || !message.text) return false
+      return changeChat(id, { groupReply: { threadId: message.threadId, messageId, memberId: message.memberId,
+        author: message.author ?? (message.role === 'user' ? '你' : '协作汇总'),
+        text: message.text.trim().slice(0, 160) } })
+    },
+    retryGroupPrompt(id, failedRunId, runId) {
+      const chat = getChat(id)
+      const input = chat?.lastInput
+      const outcome = chat?.messages.findLast(message => message.id === failedRunId + ':outcome')
+      if (!current()?.groups.some(group => group.id === id) || chat?.pending || input?.runId !== failedRunId ||
+        outcome?.status !== 'error' || !outcome.recoverable) return false
+      return changeChat(id, { pending: runId, agentRun: null, lastInput: { ...input, runId, retryDemo: true },
+        activity: { ...chat.activity, needsInput: false } })
     },
     queuePrompt(id, runId) {
       const chat = current()?.chats[id]
       if (!chat || !hasPromptContent({ text: chat.draft, attachments: chat.attachments })) return false
-      return changeChat(id, { queue: [...(chat.queue ?? []), draftInput(chat, runId, true)], draft: '', retryDemo: null, attachments: [], attachmentDetails: {} })
+      return changeChat(id, { queue: [...(chat.queue ?? []), draftInput(chat, runId, true)], draft: '', retryDemo: null, attachments: [], attachmentDetails: {}, groupReply: null })
     },
     updateQueuedPrompt(id, runId, text) {
       const chat = current()?.chats[id]

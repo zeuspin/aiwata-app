@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { conversationStatus } from '../src/conversation-meta.mjs'
 import { closeTabs } from '../src/tabs.mjs'
 import { moveBrowser, navigateBrowser, terminalOutput } from '../src/tool-surfaces.mjs'
-import { createWorkspace, fitPanels, resizePanels, setProjectChatMarker, viewAtWidth } from '../src/workspace.mjs'
+import { createWorkspace, fitPanels, resizePanels, viewAtWidth } from '../src/workspace.mjs'
 
 test('dragging a separator leaves the other separator in place', () => {
   const start = { side: 322, tools: 494 }
@@ -316,21 +316,80 @@ test('bulk tool closes are scoped to one conversation and hide the empty tool pa
   assert.deepEqual(api.current().chats.review.tabs, ['修图工具'])
 })
 
-test('project chat markers accept a color or emoji, persist and can be cleared', () => {
+test('saved projects get distinct default markers and keep edits after signing in again', () => {
   const entries = new Map()
   const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
   const api = createWorkspace(storage)
   api.login('lin')
-  assert.equal(setProjectChatMarker(api, 'plan', { kind: 'color', value: 'purple' }), true)
-  assert.deepEqual(api.current().chats.plan.marker, { kind: 'color', value: 'purple' })
-  assert.equal(setProjectChatMarker(api, 'plan', { kind: 'emoji', value: '🎨' }), true)
-  assert.equal(setProjectChatMarker(api, 'plan', { kind: 'color', value: 'invalid' }), false)
-  assert.equal(setProjectChatMarker(api, 'editor', { kind: 'emoji', value: '🎨' }), false)
+  const [key, json] = entries.entries().next().value
+  const saved = JSON.parse(json)
+  for (const project of saved.lin.projects) delete project.marker
+  saved.lin.chats.plan.marker = { kind: 'emoji', value: '💡' }
+  entries.set(key, JSON.stringify(saved))
+
   const reopened = createWorkspace(storage)
   reopened.login('lin')
-  assert.deepEqual(reopened.current().chats.plan.marker, { kind: 'emoji', value: '🎨' })
-  assert.equal(setProjectChatMarker(reopened, 'plan', null), true)
-  assert.equal(reopened.current().chats.plan.marker, null)
+  const projects = reopened.current().projects
+  assert.ok(projects.every(project => project.marker?.kind === 'color'))
+  assert.equal(new Set(projects.map(project => project.marker.value)).size, projects.length)
+  const emoji = { kind: 'emoji', value: '🎨' }
+  assert.equal(reopened.setProjectMarker('studio', emoji), true)
+  assert.equal(reopened.setProjectMarker('studio', { kind: 'color', value: 'invalid' }), false)
+  assert.equal(reopened.setProjectMarker('missing', emoji), false)
+  const created = reopened.addProject('新项目', '~/Projects/new')
+  assert.equal(created.marker.kind, 'color')
+  const custom = reopened.addProject('自定义标记项目', '~/Projects/custom', { marker: emoji })
+  assert.deepEqual(custom.marker, emoji)
+  const reloaded = createWorkspace(storage)
+  reloaded.login('lin')
+  assert.deepEqual(reloaded.current().projects.find(project => project.id === 'studio').marker, emoji)
+  assert.deepEqual(reloaded.current().projects.find(project => project.id === created.id).marker, created.marker)
+  assert.deepEqual(reloaded.current().projects.find(project => project.id === custom.id).marker, emoji)
+})
+
+test('creating a project saves its primary and additional folders together', () => {
+  const entries = new Map()
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
+  const api = createWorkspace(storage)
+  api.login('lin')
+  const existingFolders = ['~/Projects/brand-studio/assets']
+  api.updateManagement({ projectFolders: { studio: existingFolders } })
+
+  const created = api.addProject('多目录项目', [' ~/Projects/main ', '~/Projects/design', '~/Projects/main', '~/Projects/docs'])
+  const reloaded = createWorkspace(storage)
+  reloaded.login('lin')
+  const record = reloaded.current()
+  assert.equal(record.projects.find(project => project.id === created.id).folder, '~/Projects/main')
+  assert.deepEqual(record.management.projectFolders, {
+    studio: existingFolders,
+    [created.id]: ['~/Projects/design', '~/Projects/docs'],
+  })
+})
+
+test('new chat stays outside the session list until the first prompt is admitted', () => {
+  const entries = new Map()
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
+  const api = createWorkspace(storage)
+  api.login('qiao')
+  const draft = api.openChatDraft()
+  assert.equal(draft.projectId, 'atlas')
+  assert.equal(api.current().chats[draft.id], undefined)
+  assert.equal(api.current().openChats.includes(draft.id), false)
+  api.setDraft(draft.id, '整理设计资料')
+  api.changeChat(draft.id, { projectId: 'week' })
+  assert.equal(api.send(draft.id, 'first-send').reason, 'insufficient')
+  assert.equal(api.current().chats[draft.id], undefined)
+  const reopened = createWorkspace(storage)
+  reopened.login('qiao')
+  const restored = reopened.openChatDraft()
+  assert.equal(restored.id, draft.id)
+  assert.equal(restored.draft, '整理设计资料')
+  assert.equal(restored.projectId, 'week')
+  reopened.changeChat(restored.id, { source: 'local' })
+  assert.equal(reopened.send(restored.id, 'first-send').ok, true)
+  assert.equal(reopened.current().newChatDraft, undefined)
+  assert.equal(reopened.current().chats[restored.id].projectId, 'week')
+  assert.equal(reopened.current().chats[restored.id].messages[0].text, '整理设计资料')
 })
 
 test('a draft runs, settles to idle, and remains a draft if admission fails', () => {
@@ -414,4 +473,131 @@ test('opening a conversation clears its unread marker', () => {
   api.changeChat('review', { unread: true })
   api.openChat('review')
   assert.equal(api.current().chats.review.unread, false)
+})
+
+test('the hosted room keeps its existing roster while allowing settings changes', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  const room = api.current().groups[0]
+  assert.equal(api.saveBotEntity('group', { ...room, name: '更新后的群名', members: ['editor', 'designer'], routing: 'auto' }), true)
+  assert.equal(api.saveBotEntity('group', { ...room, members: ['editor'] }), false)
+  assert.deepEqual(api.current().groups[0].members, ['editor', 'designer'])
+  assert.equal(api.current().groups[0].name, '更新后的群名')
+})
+
+test('Bot prompts respect the profile model source and copied skill settings stay independent', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  const { credits } = api.current()
+  const bot = { id: 'copy-local', profile: 'copy-local', name: '独立助手', model: 'qwen3:8b', provider: 'custom' }
+  const skills = { 'session-summary': { installed: true, enabled: false } }
+  assert.equal(api.saveBotEntity('bot', bot, { skills }), true)
+  skills['session-summary'].enabled = true
+  assert.equal(api.current().management.skills[bot.id]['session-summary'].enabled, false)
+  api.setDraft(bot.id, '试用本地模型')
+  assert.equal(api.send(bot.id, 'local-model-run').ok, true)
+  assert.equal(api.getChat(bot.id).lastInput.source, 'local')
+  assert.equal(api.current().credits, credits)
+})
+
+test('scheduled room results can be posted once without starting a discussion', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  assert.equal(api.postGroupTaskResult('missing', { id: 'run-1', name: '周报', text: '模拟结果' }), false)
+  assert.equal(api.postGroupTaskResult('release', { id: 'run-1', name: '周报', text: '模拟结果' }), true)
+  assert.equal(api.postGroupTaskResult('release', { id: 'run-1', name: '周报', text: '模拟结果' }), true)
+  const chat = api.getChat('release')
+  assert.equal(chat.messages.filter(message => message.id === 'cron:run-1').length, 1)
+  assert.equal(chat.messages.at(-1).author, '周报')
+  assert.equal(chat.pending, null)
+})
+
+test('adding a Bot with an existing member name does not change a room roster', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  api.saveBotEntity('bot', { id: 'duplicate-designer', name: '设计助手' })
+  assert.deepEqual(api.current().groups[0].members, ['editor', 'designer'])
+})
+
+test('a scheduled result after a failed discussion does not prevent retry', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  api.setDraft('release', '演示失败')
+  api.send('release', 'failed')
+  api.applyAgentEvent('release', 'failed', { type: 'message.complete', data: { status: 'error', recoverable: true } }, true)
+  api.postGroupTaskResult('release', { id: 'task', name: '周报', text: '模拟结果' })
+  assert.equal(api.retryGroupPrompt('release', 'failed', 'retry'), true)
+})
+
+test('a Bot keeps its chosen silhouette, body and eye colors across reloads and renames', async () => {
+  const { getBotAppearance } = await import('../src/bot-appearance.mjs')
+  const entries = new Map()
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
+  const api = createWorkspace(storage)
+  api.login('lin')
+  const editor = api.current().bots.find(bot => bot.id === 'editor')
+  const choice = { mode: 'character', shape: 'sun', bodyColor: '#5080ff', eyeColor: '#ffd889', eyeStyle: 'round' }
+  assert.equal(api.saveBotEntity('bot', { ...editor, name: '发布编辑', appearance: choice }), true)
+  const restored = createWorkspace(storage)
+  restored.login('lin')
+  assert.deepEqual(getBotAppearance(restored.current().bots.find(bot => bot.id === 'editor')), choice)
+  assert.notEqual(getBotAppearance(restored.current().bots.find(bot => bot.id === 'designer')).shape, choice.shape)
+})
+
+test('changing from a legacy portrait to a character leaves the uploaded photo available', async () => {
+  const { getBotAppearance } = await import('../src/bot-appearance.mjs')
+  const api = createWorkspace()
+  api.login('lin')
+  const bot = { id: 'portrait-bot', name: '样例 Bot', avatar: 'data:image/png;base64,example' }
+  assert.equal(getBotAppearance(bot).mode, 'photo')
+  const choice = { ...getBotAppearance(bot), mode: 'character', shape: 'hexagon' }
+  api.saveBotEntity('bot', { ...bot, appearance: choice })
+  const saved = api.current().bots.find(item => item.id === bot.id)
+  assert.equal(getBotAppearance(saved).mode, 'character')
+  assert.equal(saved.avatar, bot.avatar)
+})
+
+test('a custom human avatar survives a reload without losing the bot’s other avatar choices', async () => {
+  const { getBotAppearance } = await import('../src/bot-appearance.mjs')
+  const { getPortraitDesign, resolveBotPortrait } = await import('../src/bot-portraits.mjs')
+  const entries = new Map()
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
+  const api = createWorkspace(storage)
+  api.login('lin')
+  const avatar = 'data:image/png;base64,example'
+  const design = getPortraitDesign('curls', { hair: 'bob', hairColor: 'copper', background: 'mint', eyeColor: 'navy', accessory: 'glasses' })
+  const bot = { id: 'human-preset', name: '人物预设', avatar,
+    appearance: { mode: 'portrait', portrait: 'curls', shape: 'sun', portraitDesign: design } }
+  assert.equal(api.saveBotEntity('bot', bot), true)
+
+  const restored = createWorkspace(storage)
+  restored.login('lin')
+  const saved = restored.current().bots.find(item => item.id === bot.id)
+  const appearance = getBotAppearance(saved)
+  assert.equal(appearance.mode, 'portrait')
+  assert.equal(appearance.portrait, 'curls')
+  assert.deepEqual(appearance.portraitDesign, design)
+  assert.equal(resolveBotPortrait(appearance.portrait, appearance.portraitDesign).background, '#c6dcd1')
+  assert.equal(getBotAppearance({ ...saved, appearance: { ...appearance, mode: 'character' } }).shape, 'sun')
+  assert.equal(saved.avatar, avatar)
+})
+
+test('random portrait batches offer ten different silhouettes with clear hair contrast on light and dark backgrounds', async () => {
+  const { randomPortraitBatch, resolveBotPortrait } = await import('../src/bot-portraits.mjs')
+  const luminance = color => color.slice(1).match(/../g).reduce((sum, hex, i) => {
+    const n = parseInt(hex, 16) / 255
+    return sum + (n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4) * [.2126, .7152, .0722][i]
+  }, 0)
+  const batch = randomPortraitBatch()
+  assert.equal(batch.length, 10)
+  assert.equal(new Set(batch.map(design => design.hair)).size, 10)
+  assert.equal(new Set(batch.map(design => design.background)).size, 8)
+  for (const design of batch) {
+    const { hair, background } = resolveBotPortrait(design.hair, design)
+    const bg = luminance(background)
+    for (const tone of hair) {
+      const fg = luminance(tone)
+      assert.ok((Math.max(fg, bg) + .05) / (Math.min(fg, bg) + .05) >= 3, `${tone} on ${background}`)
+    }
+  }
 })

@@ -1,36 +1,131 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ProjectMarkerPicker } from './conversation-meta.jsx'
 import { tools } from './fixtures.mjs'
 import { Icon, IconButton, toolIcons } from './icons.jsx'
 import { isLocalAttachment } from './local-attachments.mjs'
 import { browserAddress, demoBrowser, emptyBrowserState, gitChanges, mediaProviders, moveBrowser, navigateBrowser, terminalOutput, toolEditDefaults } from './tool-surfaces.mjs'
 import './tool-surfaces.css'
 
+function folderName(path) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+}
+
 export function ProjectDialog({ onClose, onCreate }) {
   const dialog = useRef(null)
+  const folderRequest = useRef(0)
   const [name, setName] = useState('')
-  const [folder, setFolder] = useState('')
-  const [confirming, setConfirming] = useState(false)
+  const [marker, setMarker] = useState(null)
+  const [folders, setFolders] = useState([])
+  const [picking, setPicking] = useState(false)
+  const [folderStatus, setFolderStatus] = useState('')
+  const [demoFolder, setDemoFolder] = useState(null)
+  const [error, setError] = useState('')
+  const desktop = window.hermesDesktop
+  const hasDirectoryPicker = typeof window.showDirectoryPicker === 'function'
+
   useEffect(() => {
     dialog.current.showModal()
   }, [])
 
-  return <dialog ref={dialog} className="project-dialog" onCancel={onClose} aria-labelledby="project-heading">
-    <header><h2 id="project-heading">{confirming ? '确认项目目录' : '创建项目'}</h2><IconButton icon="close" label="关闭" onClick={onClose} /></header>
+  function addFolders(paths) {
+    const picked = paths.map(path => path.trim()).filter(Boolean)
+    if (!picked.length) {
+      setFolderStatus('未收到新的目录，已选目录会保留。')
+      return
+    }
+    setFolderStatus(picked.every(path => folders.includes(path)) ? '所选目录已在列表中。' : '')
+    setFolders(previous => [...new Set([...previous, ...picked])])
+    setName(previous => previous.trim() ? previous : folderName(picked[0]))
+    setError('')
+  }
+
+  async function pickFolder() {
+    if (!desktop?.selectPaths && !hasDirectoryPicker) {
+      setError('当前浏览器不支持直接选择目录。')
+      setDemoFolder(previous => previous ?? '')
+      return
+    }
+    const request = ++folderRequest.current
+    setError('')
+    setFolderStatus('正在等待系统目录选择…')
+    setPicking(true)
+    try {
+      if (desktop?.selectPaths) {
+        const paths = await desktop.selectPaths({ directories: true, multiple: true, title: '选择项目目录' })
+        if (request === folderRequest.current) addFolders(paths)
+      } else {
+        const directory = await window.showDirectoryPicker({ mode: 'read' })
+        if (request === folderRequest.current) addFolders([directory.name])
+      }
+    } catch (problem) {
+      if (request !== folderRequest.current) return
+      setFolderStatus('')
+      if (problem?.name === 'AbortError') setFolderStatus('系统没有返回目录，已选目录会保留。')
+      else setError('系统未能返回目录，请重新选择。')
+    } finally {
+      if (request === folderRequest.current) setPicking(false)
+    }
+  }
+
+  function addDemoFolder() {
+    const name = demoFolder?.trim()
+    if (!name) return
+    folderRequest.current += 1
+    setPicking(false)
+    addFolders([folderName(name)])
+    setDemoFolder(null)
+  }
+
+  return <dialog ref={dialog} className="project-dialog project-create-dialog" onCancel={onClose} aria-labelledby="project-heading">
+    <header><h2 id="project-heading">创建项目</h2><IconButton icon="close" label="关闭" onClick={onClose} /></header>
     <form onSubmit={event => {
       event.preventDefault()
-      if (confirming) onCreate(name, folder, event.nativeEvent.submitter?.value === 'trusted')
-      else setConfirming(true)
+      if (!picking && folders.length && !onCreate(name.trim(), folders, marker)) setError('项目未能创建，请重试。')
     }}>
-      {confirming ? <p>将 <strong>{folder}</strong> 设为项目的工作目录。这里保存演示信任状态，工具批准方式可在会话输入区另行选择。</p>
-        : <>
-            <label>项目名称<input autoFocus required value={name} onChange={e => setName(e.target.value)} placeholder="例如 品牌工作台" /></label>
-            <label>源文件夹<input required value={folder} onChange={e => setFolder(e.target.value)} placeholder="例如 ~/Projects/brand-studio" /></label>
-            <small>演示路径 · 此计算机</small>
-          </>}
+      <div className="project-name-field">
+        <ProjectMarkerPicker title={name.trim() || '新项目'} label="选择项目标记" emptyIcon="tag" triggerText="标记"
+          marker={marker} onSave={next => { setMarker(next); return true }} />
+        <input autoFocus required value={name} onChange={e => setName(e.target.value)} aria-label="项目名称" placeholder="项目名称" />
+      </div>
+      <div className="project-folder-field" role="group" aria-labelledby="project-folder-heading">
+        <div className="project-folder-heading">
+          <span id="project-folder-heading">源文件夹</span>
+          {folders.length > 0 && <span className="muted"><Icon name="laptop" size={15} />此电脑</span>}
+        </div>
+        {folders.length ? <div className="project-folder-choice project-folder-selected">
+          <ul className="project-folder-list" aria-label="已选文件夹">
+            {folders.map((folder, index) => <li key={folder} className="project-folder-row">
+              <Icon name="folder" size={17} />
+              <span className="project-folder-name" title={folder}>{folderName(folder)}</span>
+              {index === 0 && folders.length > 1 && <small className="project-folder-primary">主目录</small>}
+              <IconButton icon="close" label={'移除 ' + folder} onClick={() => setFolders(previous => previous.filter(path => path !== folder))} />
+            </li>)}
+          </ul>
+          <button className="project-folder-row project-folder-add" type="button" disabled={picking} onClick={pickFolder}>
+            <Icon name="folderAdd" size={17} />添加文件夹
+          </button>
+        </div> : <div className="project-folder-choice">
+          <p>在<strong>此电脑</strong>上添加文件夹</p>
+          <button className="secondary" type="button" aria-label="选择目录" disabled={picking} onClick={pickFolder}>
+            <Icon name="folderAdd" size={15} />添加
+          </button>
+        </div>}
+        {folderStatus && <small role="status">{folderStatus}</small>}
+        {!desktop?.selectPaths && <div className="project-folder-help">
+          <small>浏览器预览只记录目录名。</small>
+          <button type="button" onClick={() => setDemoFolder(value => value === null ? '' : null)}
+            aria-expanded={demoFolder !== null}>输入演示目录名</button>
+        </div>}
+        {demoFolder !== null && <div className="project-demo-folder">
+          <input aria-label="演示目录名" placeholder="目录名称" value={demoFolder} onChange={event => setDemoFolder(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addDemoFolder() } }} />
+          <button type="button" className="secondary" disabled={!demoFolder.trim()} onClick={addDemoFolder}>添加目录</button>
+        </div>}
+      </div>
+      {error && <p className="danger" role="alert">{error}</p>}
       <footer>
-        <button className="secondary" type="button" onClick={confirming ? () => setConfirming(false) : onClose}>{confirming ? '上一步' : '取消'}</button>
-        {confirming && <button className="secondary" value="linked">仅关联并创建</button>}
-        <button className="primary" value="trusted" disabled={!name.trim() || !folder.trim()}>{confirming ? '信任并创建' : '创建项目'}</button>
+        <button className="secondary" type="button" onClick={onClose}>取消</button>
+        <button className="primary" disabled={picking || !name.trim() || !folders.length}>创建项目</button>
       </footer>
     </form>
   </dialog>

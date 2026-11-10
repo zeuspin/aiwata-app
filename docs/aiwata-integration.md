@@ -6,12 +6,26 @@
 | --- | --- |
 | 会话 | `tui_gateway/contracts/prompt_voice.py` 的 `prompt.submit`、`approval.respond`，`sessions.py` 的 `session.interrupt`，以及 `events.py` 的消息、工具、待办和子 Agent 事件。生产适配层需要处理持久会话、重连补齐、服务端请求和流结束。本地 mock 的响应、用量和执行进度是合成数据。 |
 | 审批与追问 | `server_requests.py` 的 `approval`、`clarify` 和实际返回结构。项目目录信任、会话工作目录与工具审批分别处理。目录信任标记在此原型内保存，生产需要宿主目录授权与权限校验。 |
-| 项目与目录 | `projects_pets.py` 的 `projects.*` 与 `sessions.py` 的 `session.create`、`session.cwd.set`。真实选择器、目录验证和文件系统访问由宿主实现。 |
+| 项目与目录 | `projects_pets.py` 提供 `projects.create`、`projects.update`（名称及 `color`、`icon`）、`projects.add_folder`、`projects.set_primary`、`projects.remove_folder` 和 `projects.delete`。接入时可将单选标记写入一个外观字段，另一个传空字符串。AIWATA 桌面目前按 Codicon 名称渲染 `icon`，要在桌面端复用 Emoji 需扩展其标记渲染。会话工作目录参照 `sessions.py` 的 `session.create` 和 `session.cwd.set`。项目接口的目录关联不授予文件访问权限，真实目录选择、校验和授权由宿主实现。 |
 | 输入 | `methods_complete.py` 的路径与模型候选、`methods_tools.py` 的斜杠指令、`web_routers/uploads.py` 与 `audio.py` 的上传和转写。原型按账号和会话在 IndexedDB 保存本机附件，发送时把文件内容交给本地 Mock。正式接入时由上传适配层将文件转成 Agent 可用的附件引用。录音使用浏览器接口，转写使用样例。 |
-| Bot 与群聊 | `profiles_vault_complete_foreign_subagents.py` 的 `profiles.*`，以及 `groups_bot_relay.py` 的 `groups.create`、`groups.context`、`groups.send`、`groups.stop` 和 `groups.continue`。Mock 将成员消息用本地 `room.event` 包裹。自动分派使用固定规则演示。当前正式群聊接口支持创建时设置名单。修改已建群成员需要补服务接口或调整产品流程。 |
+| Bot 与群聊 | `profiles_vault_complete_foreign_subagents.py` 的 `profiles.list/create/describe/configure/set_asset`；`groups_bot_relay.py` 的 `groups.capabilities/create/state/log/context/send/stop/continue/approve/retry` 及群附件接口。原型使用账号内的独立 Bot 会话与模拟群聊；正式接入按网关返回的 Profile 和房间身份恢复。 |
 | 定时、连接器、技能和记忆 | `tools_commands.py` 的 `cron.manage`、`hermes_cli/web_routers` 下的任务、消息、技能、状态和配置接口。原型使用模拟运行记录、平台配置样例、技能和学习样例。实际启停与账号退出后的后台暂停需要 AIWATA 后端把账号与对应 Profile、任务和连接器绑定。 |
 | 浏览器与文件 | `events.py` 的 `preview.open`、`server_requests.py` 的 `preview.act`，以及 `web_routers/files.py`。原型页面、批注、回放和产物为本地样例。生产的任意网页预览、元素定位和操作，需要 Electron 宿主的受控预览桥接及授权。 |
 | 开发与媒体 | `web_routers/webapp.py` 的宿主终端、`web_routers/git.py` 的仓库与工作树接口。生图与图生图能力参照 `tools/image_generation_tool.py`，xAI 视频编辑参照 `tools/xai_video_tools.py`。供应商和媒体为模拟样例，画布和完整剪辑是 AIWATA 客户端功能。 |
+
+新建会话的草稿与正式会话分开保存。首次发送时，正式接入可按 AIWATA 桌面流程，将所选项目主目录作为 `cwd` 调用 `session.create`，再用返回的运行时会话 ID 提交 `prompt.submit`。选择独立会话时省略项目目录。原型保留草稿 ID 作为附件存储键，首次接纳成功后将同一份记录转为会话。
+
+新建项目在桌面调用 AIWATA preload 的 `window.hermesDesktop.selectPaths({ directories: true, multiple: true })`，本机目录面板由 Electron 的 `dialog.showOpenDialog` 打开。浏览器预览通过 `showDirectoryPicker` 逐个选择目录，只将目录名保存在 Mock 工作区。浏览器无法提供目录选择时可手动录入演示名称。正式接入时将宿主返回的真实路径作为 `folders` 一并传给 `projects.create`，默认首个目录是主目录。远程项目应由对应连接的文件系统选择器解析目录。
+
+## Bot 与群聊
+
+以 AIWATA `b524c8a430` 为依据。正式私聊从 `profiles.list` 的 `canonical_session` 恢复 Bot 专属会话。创建时将复制来源映射到 `profiles.create.clone_from`；工具组、已安装技能与 MCP 开关走 `profiles.configure`，头像走 `profiles.set_asset`。原型复制本地配置和技能选择，模型、MCP、头像、角色指令均为本地演示配置，未请求实际模型或连接器。不要在复制时隐式复制渠道凭据。
+
+原型的角色外形参考桌面端 `avatar.tsx` 的十种软体轮廓，本地分别保存外形、身体颜色、眼睛颜色、眼睛形状和图片模式。桌面端当前的软体轮廓使用自动配色；正式同步独立颜色和眼睛选项时，需要补齐外观元数据和渲染适配。上传图片与角色外观可以分别保留。
+
+网关托管群在 `groups.create` 时提交成员。群名走 `groups.rename`，用途、协作说明和响应方式走 `groups.context`。此版本没有就地修改托管群成员的接口；桌面驱动群另有实现。正式展示自动分派前检查 `driver_status.routing_modes`。原型用固定规则模拟分派，群消息和成员活动使用本地 `room.event`；正式端通过 `groups.state/log` 和实时事件同步状态，保留同一 `thread_id`，回复成员时使用真实的 `@handle`，附件换成 `groups.attachment.upload` 返回的引用。
+
+原型在会话中展示审批、停止、继续和重试。继续沿用原讨论事件；审批按成员、任务、尝试和请求绑定。原型按整轮重试且不会重复发布用户消息或重复扣演示积分；正式 `groups.retry` 针对网关返回的具体成员任务与执行代次。定时任务用 `room:<room_id>[@<profile>]` 投递；原型的手动运行只写入一条本地结果，真实调度器可根据结果中的提及启动成员处理。
 
 ## 账号与积分
 

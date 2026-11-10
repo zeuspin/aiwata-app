@@ -1,5 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { demoPrompts } from './agent-session.mjs'
+import { BotFace } from './bot-avatar.jsx'
+import { botPresence, botPresenceLabels } from './bot-presence.mjs'
 import { Icon } from './icons.jsx'
 import { hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
 import './agent-transcript.css'
@@ -36,7 +38,7 @@ export function AgentRequest({ request, onRespond }) {
   const [answers, setAnswers] = useState({})
   if (request.method === 'approval') {
     return <section className="agent-request" aria-label="Agent 审批请求">
-      <h3><Icon name="shield" />需要批准</h3>
+      <h3><Icon name="shield" />{request.params.member_name ? request.params.member_name + '请求批准' : '需要批准'}</h3>
       <div className="agent-request-content">
         <p>{request.params.description}</p>
         <pre>{request.params.command}</pre>
@@ -51,7 +53,7 @@ export function AgentRequest({ request, onRespond }) {
     event.preventDefault()
     onRespond(request, { answers, outcome: 'submitted' })
   }}>
-    <h3>Agent 需要你确认</h3>
+    <h3>{request.params.member_name ?? 'Agent'}需要你确认</h3>
     <div className="agent-request-content">{questions.map(question => <label key={question.qid}>
       {question.question}
       {question.choices?.length ? <select value={answers[question.qid] ?? ''} required
@@ -68,9 +70,11 @@ export function AgentRequest({ request, onRespond }) {
   </form>
 }
 
-function Message({ message, index, onPreview, onRetry, canRetry, onAttachmentPreview }) {
+function Message({ message, index, onPreview, onRetry, canRetry, onReply, onAttachmentPreview }) {
   return <article className={'message ' + message.role} data-message-index={index}>
     {message.author && <strong>{message.author}</strong>}
+    {message.scheduled && <small className="room-scheduled">定时任务</small>}
+    {message.reply && <blockquote className="room-quote"><strong>{message.reply.author}</strong> · {message.reply.text}</blockquote>}
     {!!message.attachments?.length && <div className="message-files">{message.attachments.map((name, index) => {
       const entry = Object.hasOwn(message.attachmentDetails ?? {}, name) ? message.attachmentDetails[name] : null
       return <React.Fragment key={name}>{index > 0 && ' · '}{isLocalAttachment(entry)
@@ -84,13 +88,15 @@ function Message({ message, index, onPreview, onRetry, canRetry, onAttachmentPre
     {message.status === 'interrupted' && <p className="muted">生成已停止</p>}
     {message.status === 'error' && <div className="agent-error">
       <p role="alert">{message.error || '本轮执行失败'}</p>
-      {canRetry && message.recoverable && <button type="button" className="secondary" onClick={onRetry}>取回重试内容</button>}
+      {canRetry && message.recoverable && <button type="button" className="secondary" onClick={onRetry}>{onReply ? '重试本轮' : '取回重试内容'}</button>}
     </div>}
     {message.usage && <small className="agent-usage">{message.usage.input ?? message.usage.input_tokens ?? 0} 输入 · {message.usage.output ?? message.usage.output_tokens ?? 0} 输出 tokens</small>}
+    {onReply && message.threadId && message.text && <button type="button" className="secondary room-reply"
+      aria-label={'引用回复 ' + (message.author ?? '你的消息')} onClick={() => onReply(message.id)}>引用回复</button>}
   </article>
 }
 
-export function Transcript({ chat, project, visible, onPositionChange, onRetry, onPreview, onScenario, onAttachmentPreview }) {
+export function Transcript({ chat, project, bot, group, visible, onPositionChange, onRetry, onReply, onPreview, onScenario, onAttachmentPreview }) {
   const scroll = useRef(null)
   const position = useRef(chat.transcriptPosition ?? { follow: true, top: 0 })
   const appliedTop = useRef(null)
@@ -144,17 +150,23 @@ export function Transcript({ chat, project, visible, onPositionChange, onRetry, 
     {!chat.messages.length
       ? <div className="welcome">
           <img className="welcome-banner" src="/aiwata-banner.svg" alt="AIWATA" />
-          <h2>{project ? '我们应该在' + project.name + '中做些什么？' : '我们要构建什么？'}</h2>
+          <h2>{bot ? '和' + bot.name + '开始工作' : group ? '在群里开始讨论'
+            : project ? '我们应该在' + project.name + '中做些什么？' : '我们要构建什么？'}</h2>
+          {(bot?.description || group) && <p className="conversation-welcome-copy">{bot?.description || '发送消息，或用 @ 邀请指定成员回复。'}</p>}
         </div>
       : <div className="message-list">{chat.messages.map((message, index) =>
           <Message key={message.id ?? index} message={message} index={index} onRetry={onRetry}
-            onPreview={onPreview} onAttachmentPreview={onAttachmentPreview}
-            canRetry={index === chat.messages.length - 1 && !chat.pending && !hasPromptContent({ text: chat.draft, attachments: chat.attachments })} />)}
-        {chat.pending && <article className="message agent">
+            onPreview={onPreview} onAttachmentPreview={onAttachmentPreview} onReply={onReply}
+            canRetry={!chat.pending && (group ? message.id === chat.lastInput?.runId + ':outcome'
+              : index === chat.messages.length - 1 && !hasPromptContent({ text: chat.draft, attachments: chat.attachments }))} />)}
+        {chat.pending && !run?.room?.paused && <article className="message agent">
           {run && <Activity turn={run} />}
           {run?.text && <p data-streaming="true">{run.text}</p>}
           {run?.preview && <button className="secondary agent-preview-link" onClick={() => onPreview(run.preview)}>打开{run.preview.label || '预览'}</button>}
-          {!request && !run?.text && <div className="thinking" role="status"><span className="spinner" />Agent 正在工作</div>}
+          {!request && !run?.text && <div className="thinking" role={bot ? undefined : 'status'}>
+            {bot ? <BotFace bot={bot} state={botPresence(chat)} size="activity" /> : <span className="spinner" />}
+            {bot ? botPresenceLabels[botPresence(chat)] : group ? '群成员正在处理' : 'Agent 正在工作'}
+          </div>}
         </article>}
       </div>}
     {!chat.pending && <div className="agent-demo-picker"><label>
@@ -162,6 +174,7 @@ export function Transcript({ chat, project, visible, onPositionChange, onRetry, 
       <select value="" onChange={event => { if (event.target.value) onScenario(event.target.value) }}>
         <option value="">填入示例提示词</option>
         {demoPrompts.map(([label, prompt]) => <option key={label} value={prompt}>{label}</option>)}
+        {group && <option value="演示轮次上限：分轮核对发布清单">达到轮次上限后继续</option>}
       </select>
     </label></div>}
   </div>

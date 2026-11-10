@@ -1,0 +1,50 @@
+.bot-conversation-header {
+  width: 100%; flex: none; padding: 14px 16px 10px;
+}
+.bot-conversation-heading { display: flex; align-items: center; gap: 9px; }
+.bot-conversation-identity { min-width: 0; flex: 1; }
+.bot-conversation-identity h2 { margin: 0; font-size: 16px; line-height: 1.4; }
+.bot-conversation-identity p { margin: 2px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.bot-presence-label {
+  flex: none; font-size: 11px; line-height: 1.5; border-radius: 6px;
+  padding: 2px 6px; color: var(--muted); background: var(--sidebar);
+}
+.bot-presence-label[data-presence="waiting"] { color: #77440e; background: #fbefd9; }
+.bot-presence-label[data-presence="blocked"] { color: #8d352e; background: #f9e9e5; }
+.bot-presence-label[data-presence="working"] { color: #2b6550; background: #e7f2eb; }
+.bot-presence-label[data-presence="done"] { color: #2b6550; }
+.room-member-list {
+  list-style: none; display: flex; flex-wrap: wrap; gap: 5px; padding: 0; margin: 9px 0 0;
+}
+.room-member-list li {
+  display: inline-flex; align-items: center; min-width: 0; gap: 5px; padding: 3px 7px 3px 4px;
+  background: var(--sidebar); border-radius: 8px; font-size: 12px; overflow-wrap: anywhere;
+}
+.room-member-status { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.room-member-status.running { color: #346447; }
+.room-member-status:is(.waiting, .failed, .denied) { color: #8b521a; }
+.room-scheduled { margin-inline-start: 6px; color: var(--muted); font-size: 11px; }
+.bot-conversation-header .sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.room-pause p { margin: 4px 0 0; font-size: 12px; }
+.room-quote, .message .room-quote {
+  margin: 0 0 6px; padding: 4px 8px; border-inline-start: 2px solid var(--line);
+  color: var(--muted); overflow-wrap: anywhere; font-size: 12px;
+}
+.room-quote strong { font-size: inherit; color: var(--text); }
+.room-quote-draft { display: flex; align-items: center; gap: 5px; margin: 0 8px 6px; }
+.room-quote-draft .room-quote { flex: 1; min-width: 0; margin: 0; }
+.room-quote-draft .room-quote span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.message .room-reply { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; min-height: 25px; padding: 2px 7px; font-size: 11px; }
+.message.user .room-reply { color: inherit; background: #ffffff16; border-color: #ffffff40; }
+.message.user .room-reply:hover { background: #ffffff30; }
+.message.user .room-quote { color: #eee; border-color: #ffffff70; }
+.message.user .room-quote strong { color: inherit; }
+.agent-transcript .welcome .conversation-welcome-copy { margin: -12px 0 0; color: var(--muted); font-size: 13px; }
+.bot-profile-links { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 12px; }
+.bot-editor-advanced { min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; }
+.bot-editor-fields { display: grid; gap: 11px; }
+.bot-editor-advanced summary { cursor: pointer; }
+.bot-editor-advanced[open] summary { margin-bottom: 9px; }
+.bot-editor-advanced > div { display: grid; gap: 10px; }

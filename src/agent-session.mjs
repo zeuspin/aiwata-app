@@ -8,6 +8,7 @@ export const demoPrompts = [
 ]
 
 const event = (type, data) => ({ type, data })
+const roomEvent = (kind, data) => event('room.event', { kind, ...data })
 const todo = status => event('todo.updated', {
   revision: status === 'completed' ? 2 : 1,
   todos: [
@@ -76,8 +77,9 @@ export function createMockAgent({ schedule = setTimeout, cancel = clearTimeout }
       if (runs.get(run.sessionId) !== run) return
       const frame = run.steps.shift()
       if (frame.method) run.waiting = frame
+      if (frame.data?.kind === 'room.paused') run.paused = true
       deliver(run, frame)
-      if (!run.waiting && runs.get(run.sessionId) === run) advance(run)
+      if (!run.waiting && !run.paused && runs.get(run.sessionId) === run) advance(run)
     }, 155)
   }
 
@@ -95,36 +97,94 @@ export function createMockAgent({ schedule = setTimeout, cancel = clearTimeout }
     request(method, params, options) {
       const sessionId = params.session_id ?? params.room_id
       const run = runs.get(sessionId)
-      if (method === 'prompt.submit' || method === 'groups.send') {
+      if (method === 'prompt.submit' || method === 'groups.send' || method === 'groups.retry') {
         if (run) return { status: 'queued' }
+        const group = method !== 'prompt.submit'
         const text = params.text ?? params.payload.text
         const received = (params.attachments ?? params.payload?.attachments ?? [])
           .map(({ name, blob }) => `${name}（${blob.size} B）`)
         const next = { sessionId, turnId: options.turnId, onEvent: options.onEvent,
+          discussionId: group ? (params.event_id ?? options.turnId) : null,
           steps: scenario(text, options.turnId, options.approvalMode, options.retryDemo), waiting: null }
+        const members = options.members ?? []
+        const threadId = params.payload?.thread_id
+        if (group) {
+          const member = members[0]
+          for (const frame of next.steps) if (frame.method && member) {
+            frame.params = { ...frame.params, member_id: member.id, member_name: member.name,
+              task_id: options.turnId + ':' + member.id, execution_generation: 1 }
+          }
+          next.steps.unshift(
+            roomEvent('room.routed', { members }),
+            roomEvent('member.activity', { members, status: 'running' }),
+          )
+        }
         const normal = next.steps.at(-1)?.type !== 'message.complete'
         if (normal) {
-          const members = options.members ?? []
-          const who = members.length ? members.join('、') + ' 已分别核对。' : ''
-          next.steps.push(...members.map((display_name, index) => event('room.event', {
-            room_id: sessionId, event_id: options.turnId + ':' + index, kind: 'message.member',
-            actor: { kind: 'member', id: display_name, display_name },
-            payload: { text: display_name + '已完成负责部分的检查，并提交到本轮汇总。' },
-          })))
+          const memberMessages = (round, message) => members.map(member => roomEvent('message.member', {
+            room_id: sessionId, event_id: options.turnId + ':' + round + ':' + member.id,
+            actor: { kind: 'member', id: member.id, display_name: member.name },
+            payload: { thread_id: threadId, text: message },
+          }))
+          if (group) {
+            next.steps.push(...memberMessages(1, '我已完成负责部分的检查，并提交到本轮汇总。'))
+            if (text.includes('演示轮次上限')) {
+              next.steps.push(roomEvent('room.paused', { discussionId: next.discussionId }),
+                roomEvent('member.activity', { members, status: 'running' }),
+                ...memberMessages(2, '我已继续检查，并补充了后续建议。'))
+            }
+          }
           const reference = text.replace(/\s+/g, ' ').slice(0, 52) || '附件'
           const receipt = received.length ? '已接收本地附件：' + received.join('、') + '。\n\n' : ''
-          const result = receipt + who + '已整理「' + reference + '」的工作清单。\n\n1. 确认目标和输入资料。\n2. 校对关键内容并标注待确认项。\n3. 把结果保存为可复核的交付记录。'
+          const result = receipt + '已整理「' + reference + '」的工作清单。\n\n1. 确认目标和输入资料。\n2. 校对关键内容并标注待确认项。\n3. 把结果保存为可复核的交付记录。'
           next.steps.push(...stream(result, options.turnId))
         }
         runs.set(next.sessionId, next)
         advance(next)
         return { status: 'streaming' }
       }
+      if (method === 'groups.continue') {
+        if (!run?.paused || run.discussionId !== params.discussion_event_id) return { continued: false }
+        run.paused = false
+        deliver(run, roomEvent('room.continued', { discussionId: run.discussionId }))
+        advance(run)
+        return { continued: true }
+      }
+      if (method === 'groups.approve') {
+        const action = run?.waiting?.params
+        if (!run?.discussionId || run.waiting?.method !== 'approval' || !action?.member_id ||
+          !['member_id', 'task_id', 'execution_generation', 'request_id'].every(key => action[key] === params[key]) ||
+          !action.choices.includes(params.choice)) return { approved: false }
+        if (params.choice === 'deny') {
+          const denied = { id: action.member_id }
+          const othersReply = run.steps.some(frame => frame.data?.kind === 'message.member' && frame.data.actor.id !== denied.id)
+          const deniedStatus = roomEvent('member.activity', { members: [denied], status: 'denied' })
+          if (!othersReply) {
+            run.steps = [deniedStatus, todo('cancelled'), ...stream('已拒绝该操作，未执行发布脚本。', run.turnId)]
+          } else {
+            run.steps = [deniedStatus, ...run.steps.flatMap(frame => {
+              if (['tool.start', 'tool.complete', 'preview.open'].includes(frame.type)) return []
+              if (frame.data?.kind === 'message.member' && frame.data.actor.id === denied.id) return []
+              if (frame.data?.kind === 'member.activity') return [roomEvent('member.activity',
+                { ...frame.data, members: frame.data.members.filter(member => member.id !== denied.id) })]
+              return [frame]
+            })]
+          }
+        }
+        return { approved: resolve(run, params.request_id) }
+      }
       if (method === 'approval.respond') {
+        if (run?.discussionId) return { resolved: 0 }
         if (run?.waiting?.method !== 'approval' || run.waiting.id !== params.request_id ||
           !run.waiting.params.choices.includes(params.choice)) return { resolved: 0 }
         if (params.choice === 'deny') run.steps = [todo('cancelled'), ...stream('已拒绝该操作。我保留了检查结果，未执行发布脚本。', run.turnId)]
         return { resolved: Number(resolve(run, params.request_id)) }
+      }
+      if (method === 'groups.stop') {
+        if (!run?.discussionId) return { cancelled: 0 }
+        cancel(run.timer)
+        deliver(run, event('message.complete', { status: 'interrupted', partial: true }))
+        return { cancelled: 1 }
       }
       if (method === 'session.interrupt') {
         if (!run) return { status: 'not_interrupted' }
@@ -174,9 +234,24 @@ export function projectAgentEvent(chat, frame, viewed) {
   }
   if (type === 'todo.updated') return { agentRun: { ...run, todos: data.todos } }
   if (type === 'preview.open') return { agentRun: { ...run, preview: data } }
+  if (type === 'room.event' && data.kind === 'room.routed') {
+    return { agentRun: { ...run, room: { statuses: Object.fromEntries(data.members.map(member => [member.id, 'queued'])) } } }
+  }
+  if (type === 'room.event' && data.kind === 'member.activity') {
+    const statuses = { ...run.room?.statuses, ...Object.fromEntries(data.members.map(member => [member.id, data.status])) }
+    return { agentRun: { ...run, room: { ...run.room, statuses } } }
+  }
+  if (type === 'room.event' && (data.kind === 'room.paused' || data.kind === 'room.continued')) {
+    const paused = data.kind === 'room.paused'
+    return { agentRun: { ...run, room: { ...run.room, paused: paused ? data.discussionId : null } },
+      activity: { ...chat.activity, needsInput: paused } }
+  }
   if (type === 'room.event' && data.kind === 'message.member') {
     if (chat.messages.some(message => message.id === data.event_id)) return null
-    return { messages: [...chat.messages, { role: 'agent', id: data.event_id, author: data.actor.display_name, text: data.payload.text }] }
+    const statuses = { ...run.room?.statuses, [data.actor.id]: 'completed' }
+    return { messages: [...chat.messages, { role: 'agent', id: data.event_id, author: data.actor.display_name,
+      memberId: data.actor.id, threadId: data.payload.thread_id, text: data.payload.text }],
+    agentRun: { ...run, room: { ...run.room, statuses } } }
   }
   if (type === 'subagent.start' || type === 'subagent.complete') {
     const child = { ...data, complete: type === 'subagent.complete' }
@@ -184,11 +259,17 @@ export function projectAgentEvent(chat, frame, viewed) {
   }
   if (type === 'message.complete') {
     const status = data.status ?? 'complete'
-    const { request, segments, ...details } = run
+    const { request, segments, room, ...details } = run
+    const input = chat.lastInput
+    const memberStatuses = room?.statuses && Object.fromEntries(Object.entries(room.statuses).map(([id, state]) => [
+      id, state === 'completed' || state === 'denied' ? state : status === 'error' ? 'failed' : status === 'interrupted' ? 'stopped' : state,
+    ]))
     return {
       pending: null, agentRun: null, unread: !viewed,
+      ...(input?.threadId ? { roomOutcome: { statuses: memberStatuses ?? {} } } : {}),
       activity: { ...chat.activity, needsInput: false, queuePaused: Boolean(chat.queue?.length && status !== 'complete') },
       messages: [...chat.messages, { role: 'agent', ...details, text: data.text || run.text, status,
+        ...(input?.threadId ? { id: input.runId + ':outcome', threadId: input.threadId, author: '协作汇总' } : {}),
         error: data.error, usage: data.usage, recoverable: data.recoverable }],
     }
   }

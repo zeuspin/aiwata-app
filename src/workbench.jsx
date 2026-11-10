@@ -1,19 +1,20 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Composer } from './chat.jsx'
 import { AgentQueue, AgentRequest, Transcript } from './agent-transcript.jsx'
+import { BotConversationHeader, DiscussionPause } from './bot-conversation.jsx'
 import { AttachmentPreview } from './attachment-preview.jsx'
 import { hasPromptContent } from './local-attachments.mjs'
-import { MarkerDialog } from './conversation-meta.jsx'
 import { tools } from './fixtures.mjs'
 import { Icon, IconButton, toolIcons } from './icons.jsx'
 import { Management } from './management.jsx'
 import { managedSections, resolveGroupMembers } from './management.mjs'
-import { ContextList, Rail, contextItems } from './navigation.jsx'
+import { routeRoomMessage } from './room.mjs'
+import { ArchiveList, ContextList, Rail, contextItems } from './navigation.jsx'
 import { Directory, emptyToolData, ProjectDialog, ToolPanel } from './surfaces.jsx'
 import { ContextMenu, menuPosition, TabDialog, TabStrip } from './tab-controls.jsx'
 import { conversationSection } from './tabs.mjs'
 import { navigateBrowser, toolEditDefaults } from './tool-surfaces.mjs'
-import { chatMoveTargets, contextBreakpoint, fitPanels, initialPanels, minSidebarWidth, minToolWidth, moveChatToProject, railWidth, resizePanels, setChatArchived, setProjectChatMarker, viewAtWidth } from './workspace.mjs'
+import { chatMoveTargets, contextBreakpoint, fitPanels, initialPanels, minSidebarWidth, minToolWidth, moveChatToProject, railWidth, resizePanels, setChatArchived, viewAtWidth } from './workspace.mjs'
 
 const chatSections = ['projects', 'bots']
 const nextMode = { hidden: 'split', split: 'full', full: 'hidden' }
@@ -29,8 +30,9 @@ function lastChatInSection(record, section) {
 
 function restoreRoute(record, section) {
   const savedItem = record.navigation?.modules?.[section]?.item
+  const fresh = section === 'projects' && Boolean(record.newChatDraft && record.navigation?.modules?.projects?.draftOpen)
   return {
-    section, chatId: lastChatInSection(record, section),
+    section, fresh, chatId: fresh ? null : lastChatInSection(record, section),
     item: savedItem && contextItems(record, section).some(([id]) => id === savedItem) ? savedItem : null,
   }
 }
@@ -72,7 +74,7 @@ function exportConversation(session) {
 export function Workbench({ account, api, refresh, onOffline }) {
   const record = api.current()
   const [viewport, setViewport] = useState(window.innerWidth)
-  const [{ section, chatId, item }, setRoute] = useState(() => {
+  const [{ section, chatId, item, fresh }, setRoute] = useState(() => {
     const section = record.navigation?.section ?? conversationSection(record, record.activeChat)
     return restoreRoute(record, section)
   })
@@ -80,10 +82,19 @@ export function Workbench({ account, api, refresh, onOffline }) {
   const isManaged = managedSections.has(section)
   const pageState = record.navigation?.modules?.[section]
   const chat = isChat ? record.chats[chatId] : null
-  const project = record.projects.find(entry => entry.id === chat?.projectId)
+  const draftChat = fresh ? record.newChatDraft : null
+  const composerChat = chat ?? draftChat
+  const bot = chat && record.bots.find(entry => entry.id === chat.id)
+  const group = chat && record.groups.find(entry => entry.id === chat.id)
+  const members = resolveGroupMembers(group, record.bots).map(id => record.bots.find(entry => entry.id === id))
+  const project = record.projects.find(entry => entry.id === composerChat?.projectId)
+  const canChooseProject = section === 'projects' && composerChat &&
+    !composerChat.messages.length && !composerChat.pending && !composerChat.queue?.length
   const [panels, setPanels] = useState(() => ({ ...initialPanels, ...record.preferredPanelWidths }))
+  const [chatFocus, setChatFocus] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [menu, setMenu] = useState('')
+  const [railPanel, setRailPanel] = useState(null)
   const [contextAction, setContextAction] = useState(null)
   const [tabDialog, setTabDialog] = useState(null)
   const [transcriptVersion, setTranscriptVersion] = useState(0)
@@ -95,20 +106,24 @@ export function Workbench({ account, api, refresh, onOffline }) {
   const preparingPrompts = useRef(new Set())
   const toastTimer = useRef(null)
   const previewTimer = useRef(null)
+  const railPanelTimer = useRef(null)
+  const railPanelTrigger = useRef(null)
+  const railPanelElement = useRef(null)
   const toolInsertAfter = useRef(null)
   const { agent } = api
-  const viewedChat = useRef(chat?.id)
+  const viewedChat = useRef(composerChat?.id)
   const drag = useRef(null)
   const projectTrigger = useRef(null)
 
   const narrow = viewport < contextBreakpoint
   const toolView = chat?.tool ? chat.view : 'hidden'
-  const sidebar = record.navigation?.sidebarOpen ?? !narrow
-  const view = viewAtWidth(toolView, viewport, sidebar)
+  const sidebar = !chatFocus && (record.navigation?.sidebarOpen ?? !narrow)
+  const view = chatFocus ? 'hidden' : viewAtWidth(toolView, viewport, sidebar)
   const full = view === 'full'
   const split = view === 'split'
   const replacesChat = view === 'replace'
   const contextVisible = !full && sidebar
+  const floatingSection = !full && (!contextVisible || railPanel?.section === 'archive') ? railPanel?.section : null
   const fitted = fitPanels(panels, viewport, contextVisible, split)
   const toolsWidth = replacesChat ? viewport - railWidth - fitted.side : fitted.tools
   const visibleTools = view !== 'hidden'
@@ -127,6 +142,7 @@ export function Workbench({ account, api, refresh, onOffline }) {
     '--context-size': fitted.side + 'px',
     '--tool-size': toolsWidth + 'px',
     '--sidebar-content': (contextVisible ? fitted.side : panels.side) + 'px',
+    '--flyout-width': panels.side + 'px',
   }
 
   useEffect(() => {
@@ -138,6 +154,7 @@ export function Workbench({ account, api, refresh, onOffline }) {
       window.removeEventListener('resize', resize)
       clearTimeout(toastTimer.current)
       clearTimeout(previewTimer.current)
+      clearTimeout(railPanelTimer.current)
       preparingPrompts.current.clear()
     }
   }, [])
@@ -165,12 +182,45 @@ export function Workbench({ account, api, refresh, onOffline }) {
     toastTimer.current = setTimeout(() => setToast(null), 3100)
   }
 
+  function closeRailPanel(restoreFocus = false) {
+    clearTimeout(railPanelTimer.current)
+    setRailPanel(null)
+    if (restoreFocus) railPanelTrigger.current?.focus({ preventScroll: true })
+  }
+
+  function openRailPanel(event, target, pinned) {
+    if (!pinned && event.pointerType !== 'mouse') return
+    clearTimeout(railPanelTimer.current)
+    if (!pinned && railPanel?.pinned) return
+    if (pinned && railPanel?.pinned && railPanel.section === target) {
+      closeRailPanel()
+      return
+    }
+    railPanelTrigger.current = event.currentTarget
+    setMenu('')
+    setRailPanel({ section: target, pinned })
+    if (pinned && event.detail === 0) requestAnimationFrame(() => railPanelElement.current?.focus({ preventScroll: true }))
+  }
+
+  function leaveRailPanel() {
+    clearTimeout(railPanelTimer.current)
+    if (!railPanel || railPanel.pinned) return
+    railPanelTimer.current = setTimeout(() => {
+      const focused = document.activeElement
+      if (!railPanelElement.current?.contains(focused) && !focused?.closest('dialog, .tab-context-menu')) closeRailPanel()
+    }, 180)
+  }
+
   function go(route) {
     const isChatRoute = chatSections.includes(route.section)
-    viewedChat.current = isChatRoute ? route.chatId : null
-    api.updateNavigationModule(route.section, isChatRoute ? { chatId: route.chatId } : { item: route.item }, true)
+    if (!route.chatId) setChatFocus(false)
+    viewedChat.current = route.fresh ? record.newChatDraft?.id : isChatRoute ? route.chatId : null
+    const patch = isChatRoute ? { chatId: route.chatId } : { item: route.item }
+    if (route.section === 'projects') patch.draftOpen = Boolean(route.fresh)
+    api.updateNavigationModule(route.section, route.fresh ? { draftOpen: true } : patch, true)
     setRoute(route)
     setMenu('')
+    closeRailPanel()
     setContextAction(null)
     setAttachmentPreview(null)
     clearPreview()
@@ -192,13 +242,20 @@ export function Workbench({ account, api, refresh, onOffline }) {
 
   function navigate(target) {
     if (!chatSections.includes(target)) return go(restoreRoute(record, target))
+    const route = restoreRoute(record, target)
+    if (route.fresh) return go(route)
     if (target === section && chat) return select(chat.id, target)
-    select(lastChatInSection(record, target), target)
+    select(route.chatId, target)
   }
 
   function newChat(projectId) {
-    const created = api.newChat(projectId ?? null)
-    if (created) select(created.id, 'projects')
+    if (api.openChatDraft(projectId)) go({ section: 'projects', chatId: null, item: null, fresh: true })
+  }
+
+  function chooseComposerProject(projectId) {
+    if (!canChooseProject || !api.changeChat(composerChat.id, { projectId })) return
+    if (chat) api.openChat(chat.id)
+    refresh()
   }
 
   function openTool(tool, after) {
@@ -288,10 +345,6 @@ export function Workbench({ account, api, refresh, onOffline }) {
           label: session.unread ? '标记为已读' : '标记为未读', icon: 'mail',
           run: () => { api.changeChat(id, { unread: !session.unread }); refresh() },
         },
-        ...(session.projectId ? [{
-          label: '外观…', icon: 'tag',
-          run: () => setTabDialog({ kind: 'marker', id, title, anchor }),
-        }] : []),
       ],
       [
         { label: '导出', icon: 'download', run: () => exportConversation(session) },
@@ -337,13 +390,6 @@ export function Workbench({ account, api, refresh, onOffline }) {
       report('已移动到 ' + record.projects.find(project => project.id === value).name)
       return true
     }
-    if (kind === 'marker') {
-      if (!setProjectChatMarker(api, id, value)) return false
-      closeTabDialog()
-      refresh()
-      report(value ? '标记已保存' : '标记已清除')
-      return true
-    }
     closeTabDialog()
     if (kind === 'delete') {
       if (!api.deleteChat(id)) return
@@ -363,6 +409,8 @@ export function Workbench({ account, api, refresh, onOffline }) {
 
   function setView(mode) {
     if (!chat) return
+    setChatFocus(false)
+    if (mode === 'full') closeRailPanel()
     if (mode !== 'hidden' && !chat.tool) api.openTool(chat.id, '浏览器', undefined, { reveal: false })
     api.changeChat(chat.id, { view: mode })
     clearPreview()
@@ -370,9 +418,18 @@ export function Workbench({ account, api, refresh, onOffline }) {
   }
 
   function toggleSidebar() {
+    setChatFocus(false)
+    closeRailPanel()
     if (full) setView('split')
     api.updateNavigation({ sidebarOpen: !contextVisible })
     refresh()
+  }
+
+  function toggleChatFocus(id) {
+    if (id !== chatId) select(id)
+    setChatFocus(value => !value)
+    closeRailPanel()
+    clearPreview()
   }
 
   function toggleProject(projectId) {
@@ -384,18 +441,27 @@ export function Workbench({ account, api, refresh, onOffline }) {
     refresh()
   }
 
-  function startProject() {
+  function startProject(chatId = null) {
     projectTrigger.current = document.activeElement
-    setCreating(true)
+    setCreating({ chatId })
   }
 
   function manage(section, item = null) {
     go({ section, chatId: null, item })
   }
 
+  function openProfileSection(target, profile) {
+    if (target === 'tasks') api.updateNavigationModule(target, { taskProfile: profile, item: 'all' })
+    else api.updateNavigationModule(target, { profile })
+    go(restoreRoute(record, target))
+  }
+
   function closeProject() {
     setCreating(false)
-    requestAnimationFrame(() => projectTrigger.current?.focus())
+    requestAnimationFrame(() => {
+      if (projectTrigger.current?.isConnected) projectTrigger.current.focus()
+      else document.querySelector('.composer-project-trigger')?.focus()
+    })
   }
 
   function revealBrowser(id) {
@@ -404,28 +470,28 @@ export function Workbench({ account, api, refresh, onOffline }) {
   }
 
   function openPreview(id, data) {
+    setChatFocus(false)
     api.updateBrowser(id, previous => navigateBrowser(previous, data.url))
     revealBrowser(id)
     refresh()
   }
 
-  function runPrompt(id, runId, attachments) {
+  function runPrompt(id, runId, attachments, retry = false) {
     const current = api.current()
     const session = current.chats[id]
     const group = current.groups.find(item => item.id === id)
-    const text = session.lastInput.text
+    const input = session.lastInput
+    const text = input.text
     const roster = resolveGroupMembers(group, current.bots).map(member => current.bots.find(bot => bot.id === member))
-    const mentioned = roster.filter(bot => text.includes('@' + bot.name) || (bot.profile && text.includes('@' + bot.profile)))
-    const lead = roster.find(bot => bot.id === group?.lead)
-    const routing = group?.routing ?? 'everyone'
-    const participants = mentioned.length ? mentioned : routing === 'lead' && lead ? [lead]
-      : routing === 'everyone' ? roster : roster.slice(0, 1)
+    const previousParticipants = retry ? Object.keys(session.roomOutcome?.statuses ?? {}) : []
+    const participants = !group ? [] : previousParticipants.length
+      ? roster.filter(bot => previousParticipants.includes(bot.id)) : routeRoomMessage(roster, group, text, input.reply?.memberId)
     const params = group
-      ? { room_id: id, event_id: runId, payload: { thread_id: runId, text, attachments } }
-      : { session_id: id, text, attachments, queued: session.lastInput.queued }
-    agent.request(group ? 'groups.send' : 'prompt.submit', params, {
-      turnId: runId, members: participants.map(bot => bot.name), approvalMode: current.approvalMode ?? 'smart',
-      retryDemo: session.lastInput.retryDemo,
+      ? { room_id: id, event_id: input.discussionId, payload: { thread_id: input.threadId, text, attachments } }
+      : { session_id: id, text, attachments, queued: input.queued }
+    agent.request(group ? (retry ? 'groups.retry' : 'groups.send') : 'prompt.submit', params, {
+      turnId: runId, members: participants.map(({ id, name }) => ({ id, name })), approvalMode: current.approvalMode ?? 'smart',
+      retryDemo: input.retryDemo,
       onEvent: frame => {
         if (api.accountId !== account.id) return
         if (!api.applyAgentEvent(id, runId, frame, viewedChat.current === id)) return
@@ -436,25 +502,31 @@ export function Workbench({ account, api, refresh, onOffline }) {
     })
   }
 
+  async function readPromptFiles(id, names, details) {
+    const entries = names.filter(name => Object.hasOwn(details ?? {}, name)).map(name => details[name])
+    return Promise.all(entries.filter(entry => entry?.blobId).map(async entry => {
+      const blob = await api.readLocalAttachment(id, entry.blobId)
+      if (!blob) throw new Error('Attachment unavailable')
+      return { name: entry.name, blob }
+    }))
+  }
+
   async function startPrompt(id, queued) {
-    const session = record.chats[id]
+    const session = api.getChat(id)
+    const freshSend = session && record.newChatDraft === session
     const input = queued ? session?.queue?.[0] : session
     const preparing = preparingPrompts.current
     if (!input || session.pending || (queued && session.activity?.queuePaused) || preparing.has(id)) return
     preparing.add(id)
-    const { draft, source, attachments: names, attachmentDetails: details } = input
-    const active = () => preparing.has(id) && api.current() === record && record.chats[id] === session
+    const { draft, source, projectId, groupReply, attachments: names, attachmentDetails: details } = input
+    const active = () => preparing.has(id) && api.current() === record && api.getChat(id) === session
     const isCurrent = () => active() && (queued
       ? session.queue?.[0] === input && !session.activity?.queuePaused
-      : session.draft === draft && session.source === source && session.attachments === names && session.attachmentDetails === details)
+      : session.draft === draft && session.source === source && session.projectId === projectId && session.groupReply === groupReply &&
+        session.attachments === names && session.attachmentDetails === details)
     let files
     try {
-      const entries = names.filter(name => Object.hasOwn(details ?? {}, name)).map(name => details[name])
-      files = await Promise.all(entries.filter(entry => entry?.blobId).map(async entry => {
-        const blob = await api.readLocalAttachment(id, entry.blobId)
-        if (!blob) throw new Error('Attachment unavailable')
-        return { name: entry.name, blob }
-      }))
+      files = await readPromptFiles(id, names, details)
     } catch {
       if (isCurrent()) {
         if (queued) api.pausePromptQueue(id, true)
@@ -468,7 +540,14 @@ export function Workbench({ account, api, refresh, onOffline }) {
     if (!ready) return
     const runId = queued ? input.runId : crypto.randomUUID()
     const result = queued ? api.startQueuedPrompt(id) : api.send(id, runId)
-    if (result.ok) runPrompt(id, runId, files)
+    if (result.ok) {
+      if (freshSend && viewedChat.current === id) {
+        const collapsed = record.navigation?.collapsedProjects ?? []
+        if (collapsed.includes(session.projectId)) api.updateNavigation({ collapsedProjects: collapsed.filter(id => id !== session.projectId) })
+        select(id, 'projects')
+      }
+      runPrompt(id, runId, files)
+    }
     else if (result.reason === 'insufficient') {
       if (queued) api.pausePromptQueue(id, true)
       report(queued ? '积分不足 · 队列已暂停' : '积分不足 · 托管会话需要 12 积分', true)
@@ -481,25 +560,38 @@ export function Workbench({ account, api, refresh, onOffline }) {
   }
 
   function send() {
-    if (chat.pending || chat.queue?.length) {
-      if (api.queuePrompt(chat.id, crypto.randomUUID())) refresh()
-      if (!chat.pending && !chat.activity?.queuePaused) startQueue(chat.id)
+    if (group && members.length < 2) { report('群聊成员不可用，无法发送。', true); return }
+    if (composerChat.pending || composerChat.queue?.length) {
+      if (api.queuePrompt(composerChat.id, crypto.randomUUID())) refresh()
+      if (!composerChat.pending && !composerChat.activity?.queuePaused) startQueue(composerChat.id)
       return
     }
-    void startPrompt(chat.id, false)
+    void startPrompt(composerChat.id, false)
   }
 
   function stop() {
-    if (agent.request('session.interrupt', { session_id: chat.id }).status === 'interrupted') report('已停止生成')
+    const stopped = group ? agent.request('groups.stop', { room_id: chat.id }).cancelled > 0
+      : agent.request('session.interrupt', { session_id: chat.id }).status === 'interrupted'
+    if (stopped) report(group ? '已停止讨论' : '已停止生成')
     else if (api.recoverOrphanedAgentRuns()) {
       refresh()
       report('已结束中断的模拟运行')
     }
   }
 
+  function continueDiscussion() {
+    const discussion = chat.agentRun?.room?.paused
+    if (!discussion) return
+    const result = agent.request('groups.continue', { room_id: chat.id, discussion_event_id: discussion })
+    if (!result.continued) report('这轮讨论已无法继续。', true)
+  }
+
   function respondAgent(request, value) {
     const resolved = request.method === 'approval'
-      ? agent.request('approval.respond', { session_id: chat.id, request_id: request.id, choice: value }).resolved
+      ? group ? agent.request('groups.approve', { room_id: chat.id, request_id: request.id, choice: value,
+        member_id: request.params.member_id, task_id: request.params.task_id,
+        execution_generation: request.params.execution_generation }).approved
+        : agent.request('approval.respond', { session_id: chat.id, request_id: request.id, choice: value }).resolved
       : agent.respond(chat.id, request.id, value)
     if (resolved) {
       api.resolveAgentRequest(chat.id, request.id)
@@ -508,8 +600,8 @@ export function Workbench({ account, api, refresh, onOffline }) {
   }
 
   function fillScenario(prompt) {
-    if (api.fillDemoPrompt(chat.id, prompt)) refresh()
-    else if (chat.draft.length) report('已保留草稿 · 清空输入后可填入演示示例')
+    if (api.fillDemoPrompt(composerChat.id, prompt)) refresh()
+    else if (composerChat.draft.length) report('已保留草稿 · 清空输入后可填入演示示例')
   }
 
   function updateQueue(runId, text) {
@@ -521,8 +613,24 @@ export function Workbench({ account, api, refresh, onOffline }) {
     startQueue(chat.id)
   }
 
-  function retryTurn() {
+  async function retryTurn() {
     const input = chat.lastInput
+    if (group) {
+      if (!input || chat.pending || preparingPrompts.current.has(chat.id)) return
+      preparingPrompts.current.add(chat.id)
+      const isCurrent = () => api.current() === record && api.getChat(chat.id)?.lastInput === input
+      try {
+        const files = await readPromptFiles(chat.id, input.attachments ?? [], input.attachmentDetails)
+        const runId = crypto.randomUUID()
+        if (isCurrent() && api.retryGroupPrompt(chat.id, input.runId, runId)) {
+          runPrompt(chat.id, runId, files, true)
+          refresh()
+        }
+      } catch {
+        if (isCurrent()) report('无法读取本地附件，本轮暂不能重试。', true)
+      } finally { preparingPrompts.current.delete(chat.id) }
+      return
+    }
     if (!input || chat.pending || hasPromptContent({ text: chat.draft, attachments: chat.attachments })) return
     api.changeChat(chat.id, {
       draft: input.text, retryDemo: input.text,
@@ -532,13 +640,13 @@ export function Workbench({ account, api, refresh, onOffline }) {
   }
 
   function onCommand(name, arg = '') {
-    if (name === 'new') newChat(chat?.projectId)
-    else if (name === 'title' && arg.trim()) { api.renameChat(chat.id, arg); refresh() }
+    if (name === 'new') newChat()
+    else if (name === 'title' && chat && arg.trim()) { api.renameChat(chat.id, arg); refresh() }
     else if (name === 'journey') navigate('memory')
     else if (name === 'skills') navigate('skills')
     else if (name === 'cron') navigate('tasks')
-    else if (name === 'tools') { setView('split'); openToolPicker() }
-    else if (name === 'status') report(chat.pending ? '会话正在执行' : '会话空闲')
+    else if (name === 'tools' && chat) { setView('split'); openToolPicker() }
+    else if (name === 'status') report(composerChat.pending ? '会话正在执行' : '会话空闲')
     else if (name === 'compact') report('已模拟请求压缩上下文')
     else if (name === 'resume' && record.chats[arg.trim()]) select(arg.trim())
     else return false
@@ -552,8 +660,12 @@ export function Workbench({ account, api, refresh, onOffline }) {
 
   useEffect(() => {
     function shortcuts(event) {
-      if (event.defaultPrevented || event.target.closest('dialog')) return
+      if (event.defaultPrevented || event.target.closest('dialog, :popover-open')) return
       if (event.key === 'Escape') {
+        if (floatingSection && !contextAction) {
+          closeRailPanel(true)
+          return
+        }
         setMenu('')
         if (!menu && full) setView('split')
       }
@@ -571,7 +683,7 @@ export function Workbench({ account, api, refresh, onOffline }) {
       }
       if (event.shiftKey && key === 'o') {
         event.preventDefault()
-        newChat(chat?.projectId)
+        newChat()
       }
     }
     window.addEventListener('keydown', shortcuts)
@@ -614,11 +726,31 @@ export function Workbench({ account, api, refresh, onOffline }) {
       }} />
   }
 
+  function renderContext(target, visible, floating = false) {
+    return <ContextList key={target} section={target} record={record} select={select} newChat={newChat}
+      chat={target === section ? chat : record.chats[lastChatInSection(record, target)]}
+      selectedItem={target === section ? item : record.navigation?.modules?.[target]?.item}
+      visible={visible} onOpenSection={floating ? () => navigate(target) : undefined}
+      onSearchChange={patch => { if (api.updateNavigationModule(target, patch)) refresh() }}
+      onListScroll={scrollTop => api.updateNavigationModule(target, { scrollTop })}
+      createProject={() => startProject()} onToggleProject={toggleProject} onManageProject={id => manage('project-settings', id)}
+      onProjectMarkerChange={(id, marker) => {
+        if (!api.setProjectMarker(id, marker)) return false
+        refresh()
+        return true
+      }}
+      onManageBots={id => manage('bot-settings', id)} onChatMenu={(event, id) => openContext(event, 'sidebar', id)}
+      selectItem={selected => manage(target, selected)} />
+  }
+
   return <div className={'window ' + (full ? 'full-view ' : '') + (dragging ? 'dragging' : '')}
     style={style} data-view={view} onPointerDown={event => {
       if (menu && !event.target.closest('.rail, .title-tool-region')) setMenu('')
+      if (floatingSection && !event.target.closest('#rail-panel, .rail-panel-trigger, .tab-context-menu, dialog')) closeRailPanel()
     }}>
     <header className="titlebar">
+      {contextVisible && <span className="title-divider sidebar-divider" aria-hidden="true" />}
+      {split && <span className="title-divider tool-divider" aria-hidden="true" />}
       {!full && <>
         <IconButton icon="sidebar" label={contextVisible ? '收起侧栏' : '展开侧栏'}
           aria-expanded={contextVisible} onClick={toggleSidebar} />
@@ -627,13 +759,20 @@ export function Workbench({ account, api, refresh, onOffline }) {
       {!full && !replacesChat && isChat && record.openChats.length > 0 && <TabStrip label="会话标签" className="session-tabs"
         tabs={record.openChats.map(id => {
           const item = record.chats[id]
-          return { id, title: item.title, chat: item }
+          const marker = record.projects.find(project => project.id === item.projectId)?.marker
+          const targetView = viewAtWidth(item.tool ? item.view : 'hidden', viewport, sidebar)
+          return { id, title: item.title, chat: item, marker, deferSelect: !chatFocus && targetView !== view }
         })}
-        active={chatId} onSelect={select} onClose={closeChatTabs} onMenu={(event, id) => openContext(event, 'chat', id)} />}
+        active={chatId} layout={chatFocus} onSelect={select} onDoubleClick={toggleChatFocus}
+        onClose={closeChatTabs} onMenu={(event, id) => openContext(event, 'chat', id)} />}
       {chat && <div className={'title-tool-region ' + (visibleTools ? 'with-tabs' : '')}>
         {visibleTools && <TabStrip label="工具标签" className="tool-tabs"
           tabs={chat.tabs.map(id => ({ id, title: chat.toolTitles?.[id] ?? id, icon: toolIcons[id] }))}
-          active={chat.tool} onSelect={openTool} onClose={closeToolTabs}
+          active={chat.tool} layout={full} onSelect={openTool} onClose={closeToolTabs}
+          onDoubleClick={id => {
+            if (id !== chat.tool) openTool(id)
+            setView(full ? 'split' : 'full')
+          }}
           onMenu={(event, id) => openContext(event, 'tool', id)} onPreview={previewTab} onPreviewEnd={clearPreview} />}
         <div className="title-tools">
         {visibleTools && <IconButton icon="add" label="添加工具标签" aria-expanded={menu === 'tools'} onClick={() => openToolPicker()} />}
@@ -661,46 +800,45 @@ export function Workbench({ account, api, refresh, onOffline }) {
     <div className="workspace-body">
       <div className="rail-track" inert={full}>
         <Rail active={section} navigate={navigate} account={account} balance={record.credits} menu={menu} setMenu={setMenu}
-          logout={logout} onOffline={onOffline} openAccount={navigate} />
+          logout={logout} onOffline={onOffline} openAccount={navigate} collapsed={!contextVisible}
+          panel={floatingSection} onOpenPanel={openRailPanel} onLeavePanel={leaveRailPanel} />
       </div>
       <div className="context-track" inert={!contextVisible}>
-        <aside className="context" aria-label="上下文列表">
-          <ContextList key={section} section={section} record={record} chat={chat} select={select} newChat={newChat}
-            visible={contextVisible}
-            onSearchChange={patch => { if (api.updateNavigationModule(section, patch)) refresh() }}
-            onListScroll={scrollTop => api.updateNavigationModule(section, { scrollTop })}
-            onGroupOpenChange={setGroupOpen}
-            createProject={startProject} onToggleProject={toggleProject} onManageProject={id => manage('project-settings', id)}
-            onManageBots={id => manage('bot-settings', id)} onChatMenu={(event, id) => openContext(event, 'sidebar', id)}
-            selectItem={selected => manage(section, selected)} selectedItem={item} />
-        </aside>
+        <aside className="context" aria-label="上下文列表">{renderContext(section, contextVisible)}</aside>
         {contextVisible && separator('left')}
       </div>
-      {chat ? <main className="chat-pane" inert={replacesChat}>
-        <div className="transcript-region" inert={full}><Transcript key={chat.id + ':' + transcriptVersion} chat={chat} project={project}
+      {composerChat ? <main className="chat-pane" aria-label={group ? '群聊' : bot ? 'Bot 私聊' : draftChat ? '新建会话' : undefined} inert={replacesChat}>
+        {(bot || group) && !full && <BotConversationHeader bot={bot} group={group} chat={chat} members={members}
+          onManage={() => manage('bot-settings', chat.id)} />}
+        <div className="transcript-region" inert={full}><Transcript key={composerChat.id + ':' + transcriptVersion} chat={composerChat} project={project} bot={bot} group={group}
           visible={!full && !replacesChat} onPositionChange={transcriptPosition => {
-            if (api.current()?.chats[chat.id] === chat) api.changeChat(chat.id, { transcriptPosition })
+            if (chat && api.current()?.chats[chat.id] === chat) api.changeChat(chat.id, { transcriptPosition })
           }}
-          onRetry={retryTurn} onPreview={data => openPreview(chat.id, data)} onScenario={fillScenario}
+          onRetry={retryTurn} onPreview={data => openPreview(composerChat.id, data)} onScenario={fillScenario}
+          onReply={group ? messageId => { if (api.setGroupReply(chat.id, messageId)) refresh() } : undefined}
           onAttachmentPreview={setAttachmentPreview} /></div>
-        {chat.agentRun?.request && (full
+        {group && chat.agentRun?.room?.paused && <DiscussionPause onContinue={continueDiscussion} onStop={stop} />}
+        {chat?.agentRun?.request && (full
           ? <button type="button" className="secondary agent-return" onClick={() => setView('hidden')}>查看待处理请求</button>
           : <AgentRequest key={chat.agentRun.request.id} request={chat.agentRun.request} onRespond={respondAgent} />)}
-        <AgentQueue key={'queue:' + chat.id} chat={chat} onEdit={updateQueue} onResume={resumeQueue} />
-        <Composer key={'composer:' + chat.id} chat={chat} project={project} compact={full} api={api} refresh={refresh}
+        {chat && <AgentQueue key={'queue:' + chat.id} chat={chat} onEdit={updateQueue} onResume={resumeQueue} />}
+        <Composer key={'composer:' + composerChat.id} chat={composerChat} project={project} bot={bot} group={group} members={members} compact={full} api={api} refresh={refresh}
+          autoFocus={Boolean(draftChat)}
+          onClearReply={() => { api.setGroupReply(chat.id, null); refresh() }}
+          projectPicker={canChooseProject ? { projects: record.projects, select: chooseComposerProject, create: () => startProject(composerChat.id) } : undefined}
           send={send} stop={stop} report={report} assets={record.assets} onCommand={onCommand}
           onAttachmentPreview={setAttachmentPreview} />
       </main> : isChat ? <main className="chat-pane">
         <div className="welcome workspace-empty">
           <img className="welcome-banner" src="/aiwata-banner.svg" alt="AIWATA" />
           <h2>{section === 'bots' ? '选择一个 Bot 或群聊' : '打开一条会话开始工作'}</h2>
-          {section === 'projects' && <button className="secondary" onClick={() => newChat(null)}><Icon name="add" />新聊天</button>}
+          {section === 'projects' && <button className="secondary" onClick={() => newChat()}><Icon name="add" />新聊天</button>}
           {section === 'bots' && <button className="secondary" onClick={() => manage('bot-settings')}>管理 Bot 与群聊</button>}
         </div>
       </main> : <ModulePage key={section} managed={isManaged} scrollTop={pageState?.mainScrollTop}
         onScrollChange={mainScrollTop => updateMainPage({ mainScrollTop }, false)}>
         {isManaged ? <Management section={section} selected={item} record={record} api={api}
-          refresh={refresh} report={report} account={account} onOpenChat={select} onNavigate={navigate} onCreateProject={startProject}
+          refresh={refresh} report={report} account={account} onOpenChat={select} onNavigate={navigate} onOpenProfileSection={openProfileSection}
           pageState={pageState} onPageChange={updateMainPage} onGroupOpenChange={setGroupOpen}
           onSelectItem={selected => manage(section, selected)} />
           : <Directory section={section} selected={item} record={record} report={report} account={account}
@@ -712,18 +850,28 @@ export function Workbench({ account, api, refresh, onOffline }) {
           project={project} api={api} refresh={refresh} report={report} data={toolData} update={updateToolData}
           visible={visibleTools} onAttachmentPreview={setAttachmentPreview} /></div>
       </section>}
+      {floatingSection && <aside id="rail-panel" className="context context-flyout" ref={railPanelElement}
+        aria-label={floatingSection === 'archive' ? '回收站' : '浮动侧栏'} tabIndex={-1}
+        onPointerEnter={() => clearTimeout(railPanelTimer.current)} onPointerLeave={leaveRailPanel}
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) leaveRailPanel() }}>
+        {floatingSection === 'archive'
+          ? <ArchiveList record={record} chat={chat} select={select} onClose={() => closeRailPanel(true)}
+            onChatMenu={(event, id) => openContext(event, 'sidebar', id)} />
+          : renderContext(floatingSection, true, true)}
+      </aside>}
     </div>
     {contextAction && <ContextMenu position={contextAction} groups={menuGroups()} dismiss={dismissContext} />}
-    {chat && attachmentPreview && <AttachmentPreview api={api} chatId={chat.id} entry={attachmentPreview}
+    {composerChat && attachmentPreview && <AttachmentPreview api={api} chatId={composerChat.id} entry={attachmentPreview}
       onClose={() => setAttachmentPreview(null)} />}
-    {tabDialog && (tabDialog.kind === 'marker'
-      ? <MarkerDialog title={tabDialog.title} marker={record.chats[tabDialog.id].marker}
-        onClose={closeTabDialog} onSave={applyTabDialog} />
-      : <TabDialog action={tabDialog} onClose={closeTabDialog} onSubmit={applyTabDialog} />)}
-    {creating && <ProjectDialog onClose={closeProject} onCreate={(name, folder, trusted) => {
-      const created = api.addProject(name, folder, trusted)
+    {tabDialog && <TabDialog action={tabDialog} onClose={closeTabDialog} onSubmit={applyTabDialog} />}
+    {creating && <ProjectDialog onClose={closeProject} onCreate={(name, folders, marker) => {
+      const created = api.addProject(name, folders, { marker })
+      if (!created) return false
+      if (canChooseProject && creating.chatId === composerChat.id) chooseComposerProject(created.id)
       closeProject()
-      if (created) newChat(created.id)
+      refresh()
+      report('项目已创建')
+      return true
     }} />}
     {toast && <div className={'toast ' + (toast.error ? 'toast-error' : '')} role={toast.error ? 'alert' : 'status'}>
       <Icon name={toast.error ? 'coins' : 'check'} />{toast.message}

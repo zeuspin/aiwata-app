@@ -5,7 +5,7 @@ export const defaultProfile = 'default'
 export const groupRouting = {
   auto: '自动分派',
   everyone: '全员参与',
-  lead: '由主导 Bot 响应',
+  lead: '由主导 Bot 协调',
 }
 
 export const platforms = {
@@ -82,7 +82,7 @@ export function getProfileMemory(accountId, management, profile) {
 }
 
 export function canUseProfileId(value, bots, currentId) {
-  const reserved = ['default', 'hermes', 'aiwata', 'test', 'tmp', 'root', 'sudo']
+  const reserved = ['default', 'hermes', 'aiwata', 'test', 'tmp', 'root', 'sudo', 'all', 'everyone']
   return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(value) && !reserved.includes(value)
     && !bots.some(bot => bot.id !== currentId && (bot.profile ?? bot.id) === value)
 }
