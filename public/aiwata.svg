@@ -1,0 +1,27 @@
+
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1312" height="1312" viewBox="420 354 472 472">
+
+  <!-- Black background -->
+  <rect width="1312" height="1312" fill="#000000"></rect>
+
+  <!-- Mirrored mark: white body with the orange square at upper left. -->
+  <g transform="translate(1312 0) scale(-1 1)" fill="#FFFFFF">
+
+    <path d="
+      M656 354
+      C525.7 354 420 459.7 420 590
+      L420 826
+      L656 826
+      C786.3 826 892 720.3 892 590
+      L774 590
+      C774 655.2 721.2 708 656 708
+      L538 708
+      L538 590
+      C538 524.8 590.8 472 656 472
+      L656 354 Z"></path>
+
+    <path fill="#FF9500" d="M656 472 H774 V590 H656 Z"></path>
+
+  </g>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1980" height="442" viewBox="99 148 1980 442">
+  <title>AIWATA</title>
+  <style>
+    @media (prefers-reduced-motion: no-preference) {
+      #draw:target path {
+        stroke: #090e12;
+        stroke-width: 6;
+        stroke-linejoin: round;
+        stroke-dasharray: 1;
+        animation: draw-logo 960ms cubic-bezier(.3,.65,.35,1) both;
+      }
+      #draw:target .orange path { stroke: #ff7100; animation-delay: 140ms; }
+      #draw:target .wordmark path { animation-delay: 300ms; }
+      @keyframes draw-logo {
+        0% { stroke-dashoffset: 1; fill-opacity: 0; stroke-opacity: 1; }
+        64% { stroke-dashoffset: 0; fill-opacity: 0; stroke-opacity: 1; }
+        100% { stroke-dashoffset: 0; fill-opacity: 1; stroke-opacity: 0; }
+      }
+    }
+  </style>
+  <g id="draw">
+  <path fill="#090e12" pathLength="1" d="
+    M316 148 C433 148 530 248 530 371 V589 H316
+    C196 589 99 491 99 372 H209
+    C209 434 256 485 318 485 H420 V372
+    C420 311 373 261 316 261 Z"/>
+  <g fill="#ff7100" class="orange">
+    <path pathLength="1" d="M208 261 H317 V372 H208 Z"/>
+    <path pathLength="1" d="M631 202 H636 C642 202 644 205 644 210 V545
+      C644 550 642 553 636 553 H631 C625 553 623 550 623 545 V210
+      C623 205 625 202 631 202 Z"/>
+  </g>
+  <g fill="#090e12" fill-rule="evenodd" class="wordmark">
+    <path pathLength="1" d="M822 261 H888 L991 498 H927 L907 454 H801 L782 498 H718 Z
+      M854 325 L824 402 H886 Z"/>
+    <path pathLength="1" d="M1002 261 H1062 V498 H1002 Z"/>
+    <path pathLength="1" d="M1079 261 H1138 L1184 403 L1232 261 H1293 L1341 403 L1392 261 H1450
+      L1375 498 H1306 L1260 354 L1214 498 H1149 Z"/>
+    <path pathLength="1" d="M1516 261 H1580 L1682 498 H1618 L1598 454 H1494 L1475 498 H1413 Z
+      M1547 325 L1516 402 H1578 Z"/>
+    <path pathLength="1" d="M1647 261 H1846 V313 H1772 V498 H1711 V313 H1647 Z"/>
+    <path pathLength="1" d="M1912 261 H1978 L2079 498 H2016 L1997 454 H1890 L1871 498 H1809 Z
+      M1943 325 L1912 402 H1976 Z"/>
+  </g>
+  </g>
+</svg>
