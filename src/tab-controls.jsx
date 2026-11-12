@@ -6,6 +6,13 @@ export function menuShortcut(event) {
   return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')
 }
 
+export function TabIcon({ icon, favicon, size = 15 }) {
+  const [failed, setFailed] = useState(null)
+  return favicon && failed !== favicon
+    ? <img className="tab-favicon" src={favicon} width={size} height={size} alt="" draggable={false} onError={() => setFailed(favicon)} />
+    : <Icon name={icon} size={size} />
+}
+
 export function menuPosition(event) {
   event.preventDefault()
   event.stopPropagation()
@@ -130,7 +137,7 @@ export function TabStrip({ label, tabs, active, layout, onSelect, onDoubleClick,
   }
 
   return <div className={'tab-strip ' + className} ref={strip} role="tablist" aria-label={label} onScroll={onPreviewEnd}>
-    {tabs.map(({ id, title, icon, chat, marker, deferSelect }) => <div className={'workbench-tab ' + (id === active ? 'selected' : '')} key={id}
+    {tabs.map(({ id, title, icon, favicon, chat, marker, deferSelect }) => <div className={'workbench-tab ' + (id === active ? 'selected' : '')} key={id}
       onContextMenu={event => onMenu(event, id)}
       onPointerEnter={onPreview ? event => onPreview(event, id) : undefined} onPointerLeave={onPreviewEnd}>
       <button role="tab" title={title} aria-label={title} aria-description={chat ? describeChat(chat, marker) : undefined}
@@ -150,7 +157,7 @@ export function TabStrip({ label, tabs, active, layout, onSelect, onDoubleClick,
           onDoubleClick(id)
         })}
         onKeyDown={event => onKeyDown(event, id)}>
-        {chat ? <ConversationMarker marker={marker} /> : <Icon name={icon} size={15} />}
+        {chat ? <ConversationMarker marker={marker} /> : <TabIcon icon={icon} favicon={favicon} />}
         <span className="tab-name">{title}</span>
         {chat && <ConversationStatus chat={chat} />}
       </button>
@@ -219,34 +226,43 @@ export function TabDialog({ action, onClose, onSubmit }) {
   const deleting = action.kind === 'delete'
   const moving = action.kind === 'move'
   const [projectId, setProjectId] = useState(action.targets?.[0]?.id ?? '')
-  const [moveFailed, setMoveFailed] = useState(false)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   useEffect(() => {
     dialog.current.showModal()
   }, [])
 
-  return <dialog ref={dialog} className="project-dialog" aria-labelledby="tab-dialog-title" onCancel={onClose}>
+  return <dialog ref={dialog} className="project-dialog" aria-labelledby="tab-dialog-title" onCancel={event => {
+    event.preventDefault()
+    if (!savingRef.current) onClose()
+  }}>
     <header><h2 id="tab-dialog-title">{deleting ? '删除会话？' : moving ? '移动到项目' : '重命名标签页'}</h2>
-      <IconButton icon="close" label="关闭" onClick={onClose} /></header>
-    <form onSubmit={event => {
+      <IconButton icon="close" label="关闭" disabled={saving} onClick={onClose} /></header>
+    <form onSubmit={async event => {
       event.preventDefault()
-      if (moving) {
-        if (!onSubmit(projectId)) setMoveFailed(true)
-      } else if (deleting || title.trim()) onSubmit(title)
+      if (savingRef.current || (moving ? !projectId : !deleting && !title.trim())) return
+      savingRef.current = true
+      setSaving(true)
+      setError('')
+      try { await onSubmit(moving ? projectId : title) }
+      catch (error) { setError(error.message) }
+      finally { savingRef.current = false; setSaving(false) }
     }}>
       {deleting
         ? <p>「{action.title}」及其消息和草稿将从工作区删除。</p>
         : moving
           ? <><p>「{action.title}」将使用目标项目的工作目录。</p>
-              <label>目标项目<select autoFocus value={projectId} onChange={event => { setProjectId(event.target.value); setMoveFailed(false) }}>
+              <label>目标项目<select autoFocus disabled={saving} value={projectId} onChange={event => { setProjectId(event.target.value); setError('') }}>
                 {action.targets.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-              </select></label>
-              {moveFailed && <p role="alert" className="danger">暂时无法移动，请等会话运行结束后重试。</p>}</>
-        : <label>名称<input autoFocus value={title} maxLength={80} required onChange={event => setTitle(event.target.value)} /></label>}
+              </select></label></>
+        : <label>名称<input autoFocus disabled={saving} value={title} maxLength={80} required onChange={event => { setTitle(event.target.value); setError('') }} /></label>}
+      {error && <p role="alert" className="management-error">{error}</p>}
       <footer>
-        <button className="secondary" type="button" autoFocus={deleting} onClick={onClose}>取消</button>
-        <button className={'primary ' + (deleting ? 'danger-action' : '')} disabled={moving ? !projectId : !deleting && !title.trim()}>
-          {deleting ? '删除会话' : moving ? '移动' : '保存'}
+        <button className="secondary" type="button" autoFocus={deleting} disabled={saving} onClick={onClose}>取消</button>
+        <button className={'primary ' + (deleting ? 'danger-action' : '')} disabled={saving || (moving ? !projectId : !deleting && !title.trim())}>
+          {saving ? '正在保存…' : deleting ? '删除会话' : moving ? '移动' : '保存'}
         </button>
       </footer>
     </form>

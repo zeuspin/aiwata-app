@@ -1,7 +1,44 @@
+import { nextBrowserAnnotationNumber, pendingBrowserAnnotations } from './browser-annotation-state.mjs'
+export { annotationDestination, nextBrowserAnnotationNumber, pendingBrowserAnnotations } from './browser-annotation-state.mjs'
+
 export const demoBrowser = 'https://preview.aiwata.local'
+export const imageAspectRatios = { square: '1:1 方形', landscape: '16:9 横向', portrait: '9:16 纵向' }
+export const maxImageBytes = 8_000_000
 export const emptyBrowserState = {
   visited: '', history: [''], historyIndex: 0,
   annotations: [], annotationDrafts: {}, agentActions: [], playbackOpen: false, replayIndex: null,
+}
+
+export const emptyAnnotationDraft = { open: false, target: '', text: '' }
+
+export function editBrowserAnnotation(state, url, patch) {
+  const annotationDrafts = { ...state.annotationDrafts }
+  const draft = { ...emptyAnnotationDraft, ...annotationDrafts[url], ...patch }
+  if (draft.open || draft.target || draft.text || draft.capture) annotationDrafts[url] = draft
+  else delete annotationDrafts[url]
+  return { ...state, annotationDrafts }
+}
+
+export function saveBrowserAnnotation(state, url, { continueMarking = false } = {}) {
+  const draft = state.annotationDrafts?.[url]
+  if (!draft || (!draft.text.trim() && !draft.capture)) return state
+  const existing = draft.id ? state.annotations.find(pin => pin.id === draft.id && pin.url === url) : null
+  const next = nextBrowserAnnotationNumber(state, url)
+  const number = existing?.number ?? draft.capture?.number ?? next
+  if (draft.capture && (!Number.isSafeInteger(number) || number <= 0 || (!existing && number < next) ||
+    pendingBrowserAnnotations(state, url).some(pin => pin.number === number && pin.id !== existing?.id))) return state
+  const pin = { ...(existing ?? {}), url, target: draft.target || '整个页面', text: draft.text.trim(),
+    ...(draft.capture ? { id: existing?.id ?? draft.id ?? crypto.randomUUID(), number, capture: { ...draft.capture, number } } : {}) }
+  const annotationDrafts = { ...state.annotationDrafts }
+  delete annotationDrafts[url]
+  if (continueMarking) annotationDrafts[url] = { ...emptyAnnotationDraft, open: true }
+  const annotations = existing ? state.annotations.map(item => item === existing ? pin : item) : [...state.annotations, pin]
+  return { ...state, annotations, annotationDrafts,
+    ...(draft.capture ? { annotationBatchNumbers: { ...state.annotationBatchNumbers, [url]: Math.max(number, state.annotationBatchNumbers?.[url] ?? 0) } } : {}) }
+}
+
+export function browserAnnotationPrompt(url, pins) {
+  return ['请查看以下网页批注', url, ...pins.map((pin, index) => (index + 1) + '. ' + pin.target + ' · ' + pin.text)].join('\n')
 }
 
 export const toolEditDefaults = {
@@ -39,13 +76,13 @@ export function navigateBrowser(state, input) {
   if (visited === null) return state
   if (visited === state.visited) return state.replayIndex === null ? state : { ...state, replayIndex: null }
   const history = [...state.history.slice(0, state.historyIndex + 1), visited]
-  return { ...state, visited, history, historyIndex: history.length - 1, replayIndex: null }
+  return { ...state, visited, page: null, history, historyIndex: history.length - 1, replayIndex: null }
 }
 
 export function moveBrowser(state, by) {
   const historyIndex = state.historyIndex + by
   const visited = state.history[historyIndex]
-  return visited === undefined ? state : { ...state, visited, historyIndex, replayIndex: null }
+  return visited === undefined ? state : { ...state, visited, page: null, historyIndex, replayIndex: null }
 }
 
 export function recordBrowserAction(state, action) {

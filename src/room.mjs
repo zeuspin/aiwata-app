@@ -1,4 +1,4 @@
-export const botHandle = bot => bot.profile || bot.id
+export const botHandle = bot => bot.roomHandle || bot.profile || bot.id
 
 export function routeRoomMessage(members, group, text, replyMemberId) {
   const matches = [...text.matchAll(/(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_-]+)/gu)]

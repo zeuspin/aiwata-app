@@ -9,7 +9,7 @@ const stageLabels = {
 function StartupFrame({ label, preview, children }) {
   return <main className="startup-screen">
     <header className="startup-header">
-      <span><img src="/aiwata-app-icon.svg" alt="" />{label}</span>
+      <span><img src="./aiwata-app-icon.svg" alt="" />{label}</span>
       {preview && <small>本地预览</small>}
     </header>
     <div className="startup-body">{children}</div>
@@ -17,7 +17,7 @@ function StartupFrame({ label, preview, children }) {
 }
 
 function StartupLogo({ draw }) {
-  return <img className="startup-logo" src={'/aiwata-banner.svg' + (draw ? '#draw' : '')}
+  return <img className="startup-logo" src={'./aiwata-banner.svg' + (draw ? '#draw' : '')}
     width="1980" height="442" alt="AIWATA" />
 }
 

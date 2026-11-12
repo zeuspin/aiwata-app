@@ -1,7 +1,24 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { IconButton } from './icons.jsx'
+import { readPreviewAttachment } from './native-artifacts.mjs'
 
 const textLimit = 256 * 1024
+
+export function useToolMediaUrl(api, chatId, entry) {
+  const [result, setResult] = useState(null)
+  useEffect(() => {
+    if (!entry) return
+    let current = true
+    let url
+    api.readLocalAttachment(chatId, entry.blobId).then(blob => {
+      if (!current || !blob) return
+      url = URL.createObjectURL(blob)
+      setResult({ id: entry.blobId, url })
+    }).catch(() => {})
+    return () => { current = false; if (url) URL.revokeObjectURL(url) }
+  }, [api, chatId, entry])
+  return entry && result?.id === entry.blobId ? result.url : null
+}
 
 function previewKind(name, type) {
   if (type.startsWith('image/')) return 'image'
@@ -12,42 +29,45 @@ function previewKind(name, type) {
   return 'download'
 }
 
-export function AttachmentPreview({ api, chatId, entry, onClose }) {
+export function AttachmentPreview({ api, live, chatId, sessionId, entry, onClose }) {
   const dialog = useRef(null)
   const title = useId()
-  const [preview, setPreview] = useState(null)
+  const [result, setPreview] = useState(null)
+  const preview = result?.entry === entry && result.live === live && result.chatId === chatId && result.sessionId === sessionId ? result : null
 
   useEffect(() => { dialog.current.showModal() }, [])
 
   useEffect(() => {
-    if (!entry.blobId) return
+    setPreview(null)
+    if (!entry.blobId && !entry.roomAttachment && !entry.nativePath) return
     let active = true
     let url
+    const controller = new AbortController()
     async function load() {
       try {
-        const file = await api.readLocalAttachment(chatId, entry.blobId)
-        if (!file) throw new Error('Attachment unavailable')
+        const file = await readPreviewAttachment({ api, live, chatId, sessionId, entry, signal: controller.signal })
         const kind = previewKind(entry.name, file.type)
         const text = kind === 'text' ? await file.slice(0, textLimit).text() : ''
         if (!active) return
         url = URL.createObjectURL(kind === 'pdf' ? file.slice(0, file.size, 'application/pdf') : file)
-        setPreview({ kind, url, text, truncated: file.size > textLimit })
-      } catch {
-        if (active) setPreview({ kind: 'missing' })
+        setPreview({ kind, url, text, truncated: file.size > textLimit, entry, live, chatId, sessionId })
+      } catch (error) {
+        if (active) setPreview({ kind: 'missing', error: error.message, entry, live, chatId, sessionId })
       }
     }
     void load()
     return () => {
       active = false
+      controller.abort()
       if (url) URL.revokeObjectURL(url)
     }
-  }, [api, chatId, entry])
+  }, [api, live, chatId, sessionId, entry])
 
   return <dialog ref={dialog} className="project-dialog attachment-preview" aria-labelledby={title} onCancel={onClose}>
     <header><h2 id={title}>{entry.name}</h2><IconButton icon="close" label="关闭附件预览" onClick={onClose} /></header>
-    {!entry.blobId ? <p>此附件来自旧版草稿，重新选择原文件即可预览。</p>
-      : !preview ? <p role="status">正在读取本地附件…</p>
-        : preview.kind === 'missing' && <p role="alert">原文件无法读取，请移除附件后重新选择。</p>}
+    {!entry.blobId && !entry.roomAttachment && !entry.nativePath ? <p>此附件没有保留原文件位置，重新选择原文件即可预览。</p>
+      : !preview ? <p role="status">正在读取附件…</p>
+        : preview.kind === 'missing' && <p role="alert">{preview.error || '当前无法读取原文件。'}</p>}
     {preview?.kind === 'image' && <img src={preview.url} alt={entry.name} />}
     {preview?.kind === 'audio' && <audio src={preview.url} controls preload="metadata" />}
     {preview?.kind === 'video' && <video src={preview.url} controls preload="metadata" />}

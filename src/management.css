@@ -110,7 +110,37 @@
 .management-history summary:hover { background: #f8f9f7; }
 .management-history summary span { font-weight: 400; color: var(--muted); margin-left: 4px; }
 .management-history .management-entry { padding-block: 8px; }
+.management-task-result {
+  margin: 0;
+  padding: 0 14px 10px;
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.memory-operation {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.memory-operation p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .management-connector + .management-connector { border-top: 3px solid #f5f6f4; }
+.connector-field { display: grid; gap: 5px; }
+.connector-telegram-qr { display: grid; justify-items: center; gap: 9px; text-align: center; }
+.connector-telegram-qr img { width: min(100%, 224px); height: auto; border-radius: 8px; }
+.connector-telegram-qr a { color: var(--text); font-size: 13px; }
+.relay-code { display: grid; justify-items: start; gap: 9px; }
+.relay-code img { width: min(100%, 192px); height: auto; border-radius: 8px; }
+.relay-code label { width: 100%; }
+.relay-code a { color: var(--text); font-size: 13px; }
+.live-model-options { max-height: min(42dvh, 360px); overflow: auto; border: 1px solid var(--line); border-radius: 9px; padding: 5px; }
+.live-model-options section + section { border-top: 1px solid var(--line); }
+.live-model-options h3 { color: var(--muted); font-size: 12px; padding: 8px; }
+.live-model-options .menu-row[aria-pressed="true"] { background: var(--selected); }
+.live-model-options button:disabled { opacity: .5; }
+.model-confirmation { white-space: pre-wrap; overflow-wrap: anywhere; }
 .management-select, .management-dialog label { display: grid; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; min-width: 0; }
 .management-select select, .management-dialog textarea {
   width: 100%;
@@ -163,3 +193,13 @@
   .management-entry > .management-actions:not(:has(.management-switch)) { flex-basis: 100%; }
   .management-toolbar .search-box { width: 100%; }
 }
+
+.live-capability-dialog { width: min(680px, calc(100vw - 40px)); }
+.capability-list { display: grid; gap: 12px; margin-top: 18px; max-height: 48vh; overflow: auto; }
+.capability-card { border: 1px solid var(--line, #dedfdb); border-radius: 14px; padding: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.capability-card > div:first-child { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.capability-card small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+.capability-card p { width: 100%; margin: 0; font-size: 13px; }
+.capability-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.capability-actions .secondary { padding: 7px 10px; font-size: 13px; }
+.capability-tool-list { max-height: 160px; overflow: auto; width: 100%; }

@@ -35,6 +35,18 @@ const scheduleDays = new Set([
   'thu', 'thur', 'thurs', 'thursday', 'fri', 'friday', 'sat', 'saturday',
 ])
 
+export const memoryTypes = {
+  memory: { icon: 'book', name: '工作记忆', source: 'MEMORY.md' },
+  user: { icon: 'file', name: '用户偏好', source: 'USER.md' },
+  skill: { icon: 'spark', name: '学习技能', source: 'SKILL.md' },
+}
+
+export const memorySettings = [
+  ['memoryEnabled', '长期工作记忆', '在新会话中提供 MEMORY.md 里的工作上下文。'],
+  ['userProfileEnabled', '用户偏好', '在新会话中提供 USER.md 里的偏好和背景。'],
+  ['writeApproval', '记忆写入需批准', '在 Agent 写入记忆前请求确认。'],
+]
+
 const defaultMemory = {
   memoryEnabled: true, userProfileEnabled: true, writeApproval: false, curatorPaused: false, lastReview: null,
 }
@@ -82,6 +94,7 @@ export function getProfileMemory(accountId, management, profile) {
 }
 
 export function canUseProfileId(value, bots, currentId) {
+  if (currentId && bots.some(bot => bot.id === currentId && (bot.profile ?? bot.id) === value)) return true
   const reserved = ['default', 'hermes', 'aiwata', 'test', 'tmp', 'root', 'sudo', 'all', 'everyone']
   return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(value) && !reserved.includes(value)
     && !bots.some(bot => bot.id !== currentId && (bot.profile ?? bot.id) === value)
@@ -90,7 +103,11 @@ export function canUseProfileId(value, bots, currentId) {
 export function resolveGroupMembers(group, bots) {
   if (!group) return []
   const ids = group.members ?? bots.filter(bot => group.description?.split(' · ').includes(bot.name)).map(bot => bot.id)
-  return ids.filter(id => bots.some(bot => bot.id === id))
+  return ids.filter(id => groupMember(group,bots,id))
+}
+
+export function groupMember(group,bots,id) {
+  return bots.find(bot=>bot.id===id) ?? group?.memberDetails?.find(member=>member.id===id)
 }
 
 export function isScheduleInput(value) {

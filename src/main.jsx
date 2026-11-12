@@ -1,11 +1,17 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { App } from "./App.jsx";
-import { StartupPreview } from "./startup-preview.jsx";
-import "./styles.css";
+import { nativeAuxiliaryWindow } from './native-window-entry.mjs'
 
-createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <StartupPreview><App /></StartupPreview>
-  </React.StrictMode>,
-);
+// Keep primary JSX, styles and native initialization out of auxiliary windows.
+// The original entry owns preference hydration, providers and window routing.
+const auxiliary = nativeAuxiliaryWindow(window.location.search, __AIWATA_NATIVE__)
+if (['quick', 'overlay', 'wake', 'hud'].includes(auxiliary)) {
+  const transparent = document.createElement('style')
+  transparent.textContent = 'html,body,#root{background:transparent !important;}'
+  document.head.appendChild(transparent)
+}
+const boot = auxiliary ? import('#native-auxiliary') : import('./primary-main.jsx')
+boot.catch(error => {
+  const root = document.getElementById('root')
+  root.setAttribute('role', 'alert')
+  root.textContent = 'AIWATA 界面无法载入：' + error.message
+  console.error(error)
+})

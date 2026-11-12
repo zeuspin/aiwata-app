@@ -1,9 +1,10 @@
 import React, { useLayoutEffect, useRef } from 'react'
-import { ConversationStatus, describeChat, ProjectMarkerPicker } from './conversation-meta.jsx'
+import { ConversationMarker, ConversationStatus, describeChat, ProjectMarkerPicker } from './conversation-meta.jsx'
 import { BotFace, GroupFace } from './bot-avatar.jsx'
 import { botPresence, botPresenceLabels } from './bot-presence.mjs'
 import { Icon, IconButton } from './icons.jsx'
-import { getManagement, platforms, resolveGroupMembers } from './management.mjs'
+import { getManagement, groupMember, platforms, resolveGroupMembers } from './management.mjs'
+import { ArchivePolicy } from './archive-policy.jsx'
 import { menuShortcut } from './tab-controls.jsx'
 
 export const sections = [
@@ -17,15 +18,15 @@ export const sections = [
 ]
 
 export function Rail({ active, navigate, account, balance, menu, setMenu, logout, onOffline, openAccount,
-  collapsed, panel, onOpenPanel, onLeavePanel }) {
+  collapsed, panel, onOpenPanel, onLeavePanel, live, onManageCapabilities, onManageConnections, onOpenNativeSurface }) {
   const activeSection = { 'project-settings': 'projects', 'bot-settings': 'bots' }[active] ?? active
-  return <nav className="rail" aria-label="工作台导航">
+  return <nav className="rail" aria-label="主导航栏">
     <div className="rail-actions">
       {sections.map((item, index) => {
         const floating = collapsed && index < 4
         return <React.Fragment key={item.id}>
           {index === 4 && <div className="rail-divider" aria-hidden="true" />}
-          <IconButton icon={item.icon} label={item.title} className={floating ? 'rail-panel-trigger' : ''}
+          <IconButton icon={item.icon} label={item.title} selected={activeSection === item.id} className={floating ? 'rail-panel-trigger' : ''}
             aria-pressed={activeSection === item.id} aria-expanded={floating ? panel === item.id : undefined}
             aria-controls={panel === item.id ? 'rail-panel' : undefined}
             onPointerEnter={floating ? event => onOpenPanel(event, item.id, false) : undefined}
@@ -35,9 +36,6 @@ export function Rail({ active, navigate, account, balance, menu, setMenu, logout
       })}
     </div>
     <div className="rail-bottom">
-      <IconButton icon="trash" label="回收站" className="rail-panel-trigger" aria-expanded={panel === 'archive'}
-        aria-controls={panel === 'archive' ? 'rail-panel' : undefined}
-        onClick={event => onOpenPanel(event, 'archive', true)} />
       <IconButton icon="coins" label="积分余额" aria-expanded={menu === 'credits'}
         onClick={() => setMenu(menu === 'credits' ? '' : 'credits')} />
       <button type="button" className="icon-button" aria-label="账号菜单" title="账号菜单"
@@ -47,28 +45,39 @@ export function Rail({ active, navigate, account, balance, menu, setMenu, logout
     </div>
     {menu === 'credits' && <div className="popover rail-popover credits-popover" aria-label="积分余额详情">
       <div className="popover-caption">AIWATA 积分</div>
-      <div className="balance-row"><span>可用余额</span><strong>{balance.toLocaleString('zh-CN')} 积分</strong></div>
+      {live ? <p role="status">未接入积分服务，暂时无法查询真实余额与用量。</p>
+        : <><p className="muted">演示余额，不代表真实账户积分。</p>
+          <div className="balance-row"><span>可用余额</span><strong>{balance.toLocaleString('zh-CN')} 积分</strong></div></>}
       <button className="menu-row" onClick={() => openAccount('usage')}><Icon name="file" />查看用量明细</button>
     </div>}
     {menu === 'account' && <div className="popover rail-popover" aria-label="账号操作">
       <div className="account-heading">
         <span className="avatar" style={{ '--avatar': account.color }}>{account.initial}</span>
-        <div>{account.name}<small>演示账号</small></div>
+        <div>{account.name}<small>{live ? 'AIWATA 工作区' : '演示账号'}</small></div>
       </div>
+      <button className="menu-row" aria-expanded={panel === 'archive'} aria-controls={panel === 'archive' ? 'rail-panel' : undefined}
+        onClick={event => onOpenPanel(event, 'archive', true)}><Icon name="archive" />归档记录</button>
+      {onOpenNativeSurface && <button className="menu-row" onClick={()=>onOpenNativeSurface('settings')}><Icon name="settings" />高级原生设置</button>}
+      {onManageConnections && <button className="menu-row" onClick={onManageConnections}><Icon name="link" />连接管理</button>}
+      {live && <><button className="menu-row" onClick={() => onManageCapabilities('models')}><Icon name="settings" />模型授权</button>
+      <button className="menu-row" onClick={() => onManageCapabilities('mcp')}><Icon name="link" />MCP 管理</button></>}
       <button className="menu-row" onClick={() => openAccount('profile')}><Icon name="settings" />个人资料</button>
       <button className="menu-row" onClick={() => openAccount('usage')}><Icon name="coins" />积分和用量</button>
-      <button className="menu-row" onClick={onOffline}><Icon name="offline" />模拟断网</button>
+      <button className="menu-row" disabled={live} aria-describedby={live ? 'offline-demo-status' : undefined}
+        onClick={onOffline}><Icon name="offline" />模拟断网</button>
+      {live && <small id="offline-demo-status" className="muted">模拟断网仅在演示模式可用。</small>}
       <button className="menu-row" onClick={logout}><Icon name="logout" />退出登录</button>
     </div>}
   </nav>
 }
 
-function ChatRow({ item, current, select, onMenu }) {
+function ChatRow({ item, current, select, onMenu, project }) {
   const openMenu = event => onMenu(event, item.id)
   return <div className="chat-row-wrap" onContextMenu={openMenu}>
-    <button className="context-row chat-row" aria-label={item.title} aria-description={describeChat(item)}
+    <button className="context-row chat-row" aria-label={item.title} aria-description={(project ? project.name : '无项目') + '，' + describeChat(item, project?.marker)}
       aria-current={current ? 'page' : undefined} onClick={() => select(item.id)}
       onKeyDown={event => { if (menuShortcut(event)) openMenu(event) }}>
+      {project ? <ConversationMarker marker={project.marker} /> : <Icon name="comment" size={14} />}
       <span className="chat-name">{item.title}</span>
       <ConversationStatus chat={item} />
     </button>
@@ -76,14 +85,15 @@ function ChatRow({ item, current, select, onMenu }) {
   </div>
 }
 
-export function ArchiveList({ record, chat, select, onChatMenu, onClose }) {
+export function ArchiveList({ record, chat, select, onChatMenu, onClose, live }) {
   const archived = Object.values(record.chats).filter(item => item.archived)
   return <>
     <header className="context-header">
-      <h1>回收站</h1>
-      <IconButton icon="close" label="关闭回收站" onClick={onClose} />
+      <h1>归档记录</h1>
+      <IconButton icon="close" label="关闭归档记录" onClick={onClose} />
     </header>
     <div className="context-scroll archive-list">
+      <ArchivePolicy live={live} />
       <div className="context-label">已归档会话{archived.length > 0 && ' · ' + archived.length}</div>
       {archived.length ? archived.map(item => <ChatRow key={item.id} item={item}
         current={chat?.id === item.id} select={select} onMenu={onChatMenu} />)
@@ -100,7 +110,7 @@ export function contextItems(record, section) {
     library: [['all', '全部', 'folders'], ['recent', '最近', 'clock'], ['docs', '文档', 'file']],
     tasks: [['all', '全部任务', 'folders'], ...management.tasks.map(item => [item.id, item.name, 'clock'])],
     skills: [['installed', '已安装', 'spark'], ['available', '技能目录', 'book']],
-    connectors: [['all', '全部连接器', 'folders'], ...management.connectors.map(item => [item.id, item.name, platforms[item.id].icon])],
+    connectors: [['all', '全部连接器', 'folders'], ...Object.entries(platforms).map(([id, item]) => [id, item.name, item.icon])],
     memory: [['all', '全部学习记录', 'book'], ['memory', '工作记忆', 'file'], ['user', '用户偏好', 'settings'], ['skill', '学习技能', 'spark']],
   }
   return items[section] ?? []
@@ -140,7 +150,7 @@ export function ContextList({ section, record, chat, select, newChat, createProj
   const match = label => label.toLowerCase().includes(search.trim().toLowerCase())
   const projectChats = Object.values(record.chats).filter(item => ![...record.bots, ...record.groups].some(bot => bot.id === item.id))
   const items = contextItems(record, section)
-  const groupFace = group => <GroupFace members={resolveGroupMembers(group, record.bots).map(id => record.bots.find(bot => bot.id === id))} />
+  const groupFace = group => <GroupFace members={resolveGroupMembers(group, record.bots).map(id => groupMember(group,record.bots,id))} />
   return <>
     <header className="context-header">
       <h1>{section === 'projects' ? 'AIWATA' : title}</h1>
@@ -172,9 +182,10 @@ export function ContextList({ section, record, chat, select, newChat, createProj
               {onManageProject && <IconButton icon="settings" label={'项目设置 · ' + project.name} onClick={() => onManageProject(project.id)} />}
             </div>
             {expanded && chats.filter(item => match(project.name) || match(item.title)).map(item =>
-              <ChatRow key={item.id} item={item} current={chat?.id === item.id} select={select} onMenu={onChatMenu} />)}
+              <ChatRow key={item.id} item={item} project={project} current={chat?.id === item.id} select={select} onMenu={onChatMenu} />)}
           </div>
         })}
+        <div className="context-label">无项目</div>
         {projectChats.filter(item => !item.archived && !item.projectId && match(item.title)).map(item =>
           <ChatRow key={item.id} item={item} current={chat?.id === item.id} select={select} onMenu={onChatMenu} />)}
       </>}

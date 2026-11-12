@@ -1,0 +1,28 @@
+.live-terminal {
+  height: 100%;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  background: #232724;
+  color: #e9eee8;
+}
+.live-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-bottom: 1px solid #475147;
+  font-size: 11px;
+}
+.live-terminal-bar > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.live-terminal-bar > small { flex: none; color: #c5d7b5; }
+.live-terminal-bar button { color: #e9eee8; }
+.live-terminal-error { margin: 0; padding: 8px 10px; color: #f5beab; font-size: 12px; }
+.live-terminal-screen { flex: 1; min-height: 0; padding: 8px; overflow: hidden; }
+.live-terminal-screen .xterm { height: 100%; }

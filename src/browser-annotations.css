@@ -1,0 +1,66 @@
+.annotation-number { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #2f80ed; color: #fff; font: 600 11px/1 system-ui; }
+.annotation-pin-title, .annotation-draft-target { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.annotation-pin-title > strong, .annotation-draft-target > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.annotation-pin-title .icon-button { width: 26px; height: 26px; }
+.annotation-image { display: block; width: fit-content; max-width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); cursor: zoom-in; }
+.annotation-image:focus-visible { outline: 2px solid #2f80ed; outline-offset: 2px; }
+.annotation-image img { display: block; max-width: 100%; max-height: 110px; object-fit: contain; }
+.annotation-draft-target { font-size: 12px; }
+.annotation-capturing { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.annotation-recipient { color: var(--muted); overflow-wrap: anywhere; font-size: 11px; }
+.annotation-instructions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); }
+.annotation-image-preview { width: fit-content; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.annotation-image-preview::backdrop { background: #0007; }
+.annotation-image-preview header { display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 13px; margin-bottom: 10px; }
+.annotation-image-preview > img { display: block; max-width: 100%; max-height: calc(100dvh - 110px); object-fit: contain; }
+.browser-pins li > p { white-space: pre-wrap; }
+.browser-annotation-empty { display: grid; align-content: center; justify-items: center; gap: 12px; flex: 1; padding: 32px; text-align: center; color: var(--muted); }
+.browser-annotation-empty h3 { font-size: 15px; color: var(--text); }
+.browser-annotation-empty p { max-width: 280px; margin: 0; font-size: 13px; line-height: 1.7; }
+
+/* White note capsule from the supplied recording, anchored to the native pin. */
+.native-annotation-card {
+  position: absolute; z-index: 20; display: flex; align-items: center; gap: 4px;
+  width: min(280px, calc(100% - 24px)); height: 44px; margin: 0; padding: 0 6px 0 16px;
+  border: 1px solid #e9e9e9; border-radius: 999px; background: #fff; color: #242424;
+  box-shadow: 0 3px 12px #00000012, 0 1px 3px #00000008;
+}
+.native-annotation-card input {
+  min-width: 0; flex: 1; width: 0; padding: 0; border: 0; outline: 0; border-radius: 0;
+  background: transparent; color: #242424; caret-color: #242424; color-scheme: light;
+  font-family: inherit; font-size: 13px; font-weight: 400; line-height: 20px; text-align: left; box-shadow: none;
+}
+.native-annotation-card input::placeholder { color: #a0a0a0; }
+.native-annotation-card input:focus-visible { outline: none; box-shadow: none; }
+.native-annotation-card > button {
+  display: grid; place-items: center; flex: none; width: 30px; height: 30px; min-height: 0;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; color: #777; cursor: pointer;
+}
+.native-annotation-card > button:hover { color: #222; background: #f1f1f1; }
+.native-annotation-card > .annotation-save { color: #fff; background: #2c2c2c; }
+.native-annotation-card > .annotation-save:hover { color: #fff; background: #111; }
+.native-annotation-card > .annotation-microphone.recording { color: #bf493a; background: #fff0ed; }
+.native-annotation-card > button:focus-visible { outline: 2px solid #2f80ed; outline-offset: 2px; }
+.native-annotation-card > button:disabled { opacity: .45; cursor: wait; }
+.annotation-voice-status { flex: none; font-size: 10px; color: #777; }
+.live-browser .browser-bar { position: relative; z-index: 25; border-bottom: 0; }
+.browser-bar .browser-annotate-toggle[aria-pressed="true"] { background: #e3eafe; color: #5869c6; }
+.annotation-controls {
+  position: absolute; z-index: 26; display: flex; align-items: center; gap: 4px;
+  max-width: calc(100% - 24px); height: 40px; padding: 4px 6px;
+  border: 1px solid #444; border-radius: 11px; background: #272727; color: #eee;
+  box-shadow: 0 3px 12px #0002; white-space: nowrap;
+}
+.annotation-controls button { min-height: 0; font-family: inherit; }
+.annotation-controls .icon-button, .annotation-grip { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #b8b8b8; }
+.annotation-controls .icon-button:hover, .annotation-grip:hover { background: #ffffff16; color: #fff; }
+.annotation-controls button:focus-visible { outline: 2px solid #99b9ff; outline-offset: 1px; }
+.annotation-controls button:disabled { opacity: .35; cursor: default; }
+.annotation-controls .annotation-grip { width: 18px; cursor: grab; touch-action: none; }
+.annotation-controls .annotation-grip:active { cursor: grabbing; }
+.annotation-control-count { min-width: 0; margin-right: 5px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.annotation-control-recipient { min-width: 0; max-width: 120px; margin-inline: 3px; overflow: hidden; text-overflow: ellipsis; color: #c4c4c4; font-size: 10px; }
+.annotation-send { flex: none; border: 0; border-radius: 7px; height: 27px; padding: 0 10px; background: #3878f6; color: #fff; font-size: 11px; cursor: pointer; }
+.annotation-send:hover { background: #4b87ff; }
+.annotation-drag-shield { position: fixed; inset: 0; z-index: 1000; cursor: grabbing; }
+.browser-pins { position: relative; }

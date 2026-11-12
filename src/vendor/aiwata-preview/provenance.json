@@ -1,0 +1,47 @@
+{
+  "repository": "zeuspin/aiwata",
+  "commit": "6631a6af2c58fc498ef01fa5cc4b222fc8682683",
+  "license": {
+    "path": "LICENSE.upstream.txt",
+    "sha256": "3358c4366a25a77a2d6c2a542bd183d72d560e23168a15b8cd6e1fdd308b0f06"
+  },
+  "modules": [
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/in-page.ts",
+      "sourceSha256": "3900fa04f7e4d6d20df29dfff0812b713ab9b5f692a087f41e556269ffce301b",
+      "output": "in-page.mjs",
+      "outputSha256": "d27bdaf4ccc30422e13ed72370f87f575585644386434dacacca23621229bb18"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/identity.ts",
+      "sourceSha256": "9556a23a4a85fdd2a3f176e46a0cde59ca81c10c005953f7044664b4c67fe69b",
+      "output": "identity.mjs",
+      "outputSha256": "73c0426172ab55f32e438aa847bb4f9c0cfb1e3c147fe7784b783c09d9ff6395"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/stack.ts",
+      "sourceSha256": "43fa072ba774fd49c860eba34248badc66c663a9ef081d70c056905c846a499b",
+      "output": "stack.mjs",
+      "outputSha256": "4d59fddd14e636d94d39d8e7a565b2b2d7d9d3abd3227315bd03acd4ceaa6f2b"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/pack.ts",
+      "sourceSha256": "8a324be23d0cf14ef53cbd79e00d7036885427bf7828e14a58bc9cbd9bc1da50",
+      "output": "pack.mjs",
+      "outputSha256": "cf6bc303d148abc88a460f20402ef7a870fb31bb2075cf604cbb2a83e5ed8196"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/group.ts",
+      "sourceSha256": "a50e05a1a8b42ba3a16ce7f2239c88cdf008a6a80a23ca8a1276f0a63914444c",
+      "output": "group.mjs",
+      "outputSha256": "4bea1d15c54b52094df5455c17c1f7715f329d710120c8b856375d6694bc46ad"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-annotate/tokens.ts",
+      "sourceSha256": "84d7125eb8803164ff8b65fb9fe341b94f7f3ae2adc7ce54217807c1f38c5fcf",
+      "output": "tokens.mjs",
+      "outputSha256": "2f54ad00798a5d74964592a8ee73e04a4358282917aa67f0e354c78fdbef8f8d"
+    }
+  ],
+  "sync": "node scripts/sync-browser-annotations.mjs [upstream-checkout] [commit]"
+}

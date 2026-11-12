@@ -36,6 +36,7 @@
 .browser-pins li { padding: 7px 0; overflow-wrap: anywhere; }
 .browser-pins li + li { border-top: 1px solid var(--line); }
 .browser-pins strong, .browser-playback strong { font-size: 12px; }
+.live-video-player { display: block; width: 100%; max-height: 280px; background: #161616; border-radius: 8px; }
 .browser-pins .primary, .browser-note .secondary { justify-self: end; }
 .browser-note label, .tool-field { display: grid; gap: 5px; font-size: 12px; font-weight: 530; overflow-wrap: anywhere; }
 .browser-note textarea {

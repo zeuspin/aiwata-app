@@ -1,0 +1,59 @@
+{
+  "repository": "zeuspin/aiwata",
+  "commit": "6631a6af2c58fc498ef01fa5cc4b222fc8682683",
+  "license": {
+    "path": "LICENSE.upstream.txt",
+    "sha256": "3358c4366a25a77a2d6c2a542bd183d72d560e23168a15b8cd6e1fdd308b0f06"
+  },
+  "modules": [
+    {
+      "path": "apps/desktop/src/lib/preview-act/act-in-page.ts",
+      "sourceSha256": "0f8052df4c1e0f930449122802bdfef57a2af0d072daa2afa923417a426813bf",
+      "output": "act-in-page.mjs",
+      "outputSha256": "e7d8a8daea5f26dfdd722c3bd4c3f4668fdcb0fe1cbe98fcc4424db857acf58b"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-act/identity.ts",
+      "sourceSha256": "c6d01a49c418f852d580041b38ce1164a4b7b36191d30614094cba3bf623b0a9",
+      "output": "identity.mjs",
+      "outputSha256": "140d1228984d8de4111439e26254fc3547a0b1c0d2ff1fc7720ee165fe923aa1"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-act/naming.ts",
+      "sourceSha256": "e803e94f04c07a09ebf0f79623cea44b71b5dcf46b74878290a28d56f569bc50",
+      "output": "naming.mjs",
+      "outputSha256": "16f5ac16efaa30634d218dc1bad5e8581bd1ae5dc341062cf3c2e041b9b3a553"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-act/visibility.ts",
+      "sourceSha256": "785708f3dbb73300977686363a2d577647159dc471b5696b04e025a70de475ba",
+      "output": "visibility.mjs",
+      "outputSha256": "1e31b0e1e7665dd2a7c901a74f8bf1826d0662fccaff42e14c2c2f18a10ed2fa"
+    },
+    {
+      "path": "apps/desktop/src/lib/preview-act/watch-in-page.ts",
+      "sourceSha256": "d161553c26beedb39f014a6e027f40f5c0243fd1caa42500559fb97f131440de",
+      "output": "watch-in-page.mjs",
+      "outputSha256": "f1e5c18f3cb8a1b0fdf546c1288914c948837f1806fb2a7488b51405c409463f"
+    },
+    {
+      "path": "apps/desktop/src/app/chat/right-rail/preview-drive.ts",
+      "sourceSha256": "987b520b609ecfd388ac558f99287bb7b210218660deb7c727582fe883de789a",
+      "output": "preview-drive.mjs",
+      "outputSha256": "f8127fbbe1a75aa028173988090bb050e0b039cc992adedc2c914976caa0eed1",
+      "adaptations": [
+        "Resolve platform in native host; scope pointer state to input handle with WeakMap instead of module-global pointer."
+      ]
+    },
+    {
+      "path": "apps/desktop/src/app/chat/right-rail/preview-act.ts",
+      "sourceSha256": "33ba6599791a94bf90da7fb29a02f045f4f4a37a2eb9810fcc6e7f1b7a95ad75",
+      "output": "preview-act.mjs",
+      "outputSha256": "0853aa9cd0df388ed084f4cf0713c74d58321024102a9de7a348115f16ab1f6a",
+      "adaptations": [
+        "Export native actWithChannels; remove upstream store/host entry point and HMR; pass input to per-guest pointer lookup."
+      ]
+    }
+  ],
+  "sync": "node scripts/sync-browser-drive.mjs [upstream-checkout] [commit]"
+}

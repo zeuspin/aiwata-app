@@ -1,4 +1,5 @@
 import { botPortraits, getPortraitDesign } from './bot-portraits.mjs'
+import { getPeekingDesign } from './bot-peeking.mjs'
 
 // Silhouette vocabulary follows AIWATA Desktop's New Bot picker.
 export const botShapes = {
@@ -47,10 +48,11 @@ export function getBotAppearance(bot) {
   const saved = bot.appearance
   const portrait = Object.hasOwn(botPortraits, saved?.portrait) ? saved.portrait : undefined
   return {
-    mode: portrait && saved?.mode === 'portrait' ? 'portrait'
+    mode: saved?.mode === 'peeking' ? 'peeking' : portrait && saved?.mode === 'portrait' ? 'portrait'
       : bot.avatar && saved?.mode !== 'character' ? 'photo' : 'character',
     ...(portrait ? { portrait } : {}),
     ...(portrait && saved.portraitDesign ? { portraitDesign: getPortraitDesign(portrait, saved.portraitDesign) } : {}),
+    ...(saved?.peekingDesign || saved?.mode === 'peeking' ? { peekingDesign: getPeekingDesign(saved?.peekingDesign) } : {}),
     shape: Object.hasOwn(botShapes, saved?.shape) ? saved.shape : shape,
     bodyColor: validColor(saved?.bodyColor) ?? botBodyColors[index][1],
     eyeColor: validColor(saved?.eyeColor),

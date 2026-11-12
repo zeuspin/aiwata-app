@@ -96,7 +96,7 @@
 }
 .bot-look-config { min-width: 0; }
 .bot-look-families {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px;
   border-radius: 10px; background: var(--sidebar); border: 1px solid var(--line);
 }
 .bot-look-families > button {
@@ -159,6 +159,41 @@
 .bot-look-upload > input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
 .bot-look-upload:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
 .bot-look-error { color: #913c33; }
+
+.bot-peeking-controls { border: 0; padding: 0; margin-inline: 0; min-inline-size: 0; }
+.bot-peeking-summary, .bot-part-field-heading, .bot-part-palette-row, .bot-part-catalog-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.bot-peeking-summary { color: var(--muted); font-size: 11px; }
+.bot-peeking-summary > button { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.bot-part-catalog { padding-top: 10px; border-top: 1px solid var(--line); }
+.bot-part-catalog > legend { padding: 0 5px 0 0; }
+.bot-part-catalog small { margin-left: 4px; font-size: 11px; font-weight: 400; color: var(--muted); }
+.bot-part-catalog-toolbar { align-items: start; margin-bottom: 7px; }
+.bot-part-groups { display: flex; flex-wrap: wrap; gap: 3px; }
+.bot-part-groups > button { min-height: 26px; padding: 3px 7px; border-radius: 6px; color: var(--muted); font-size: 11px; }
+.bot-part-groups > button[aria-pressed="true"] { color: var(--text); background: var(--selected); }
+.bot-part-lock { flex: none; min-height: 25px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; font-size: 10px; color: var(--muted); }
+.bot-part-lock[aria-pressed="true"] { color: #365944; background: #e6efe6; border-color: #9db49f; }
+.bot-part-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; max-height: 205px; overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 3px 2px; }
+.bot-part-grid > button { display: grid; justify-items: center; align-content: start; gap: 2px; min-width: 0; padding: 5px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 10px; line-height: 1.4; }
+.bot-part-grid > button:hover:not(:disabled) { background: var(--hover); }
+.bot-part-grid > button[aria-pressed="true"] { border-color: #547460; background: #e9f0ea; color: #203d2d; }
+.bot-part-grid > button:disabled { opacity: .38; cursor: not-allowed; }
+.bot-part-grid .bot-avatar { --bot-size: 48px; }
+.bot-part-grid + .bot-look-hint { margin-top: 6px; font-size: 11px; }
+.bot-part-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bot-part-detail { display: grid; align-content: start; gap: 4px; }
+.bot-part-field-heading label { font-size: 12px; }
+.bot-part-palettes { display: grid; gap: 10px; padding-top: 11px; border-top: 1px solid var(--line); }
+.bot-part-palette > legend { margin-bottom: 5px; font-size: 12px; }
+.bot-part-palette .bot-color-choices { gap: 5px; }
+.bot-peeking-presets .bot-avatar { --bot-size: clamp(40px, 8vw, 62px); }
+@media (max-width: 430px) {
+  .bot-look-families > button { font-size: 11px; }
+  .bot-part-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .bot-part-details { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 590px) {
   .project-dialog.bot-editor-dialog { --editor-inset: 14px; }

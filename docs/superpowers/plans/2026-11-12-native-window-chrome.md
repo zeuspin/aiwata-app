@@ -1,0 +1,13 @@
+# Native window chrome and Dock handoff
+
+User report: two same-looking Dock entries and native macOS traffic lights overlapping the sidebar toggle; inspect Windows and Linux too. Preserve original host/Agent/Profile identities, no branch/commit/push, no new drivers, and do not restart the user's current app without need.
+
+Evidence: Dock recent-apps records the installer at /Applications/AIWATA.app, while one real Electron desktop process runs the installed generated desktop. They have different existing bundle identities. The original host already returns windowButtonPosition, nativeOverlayWidth, fullscreen/maximized and customWindowControls; the new renderer discarded these. Preserve bundle IDs and global Dock preferences.
+
+Implement window-only sanitized chrome state using the original native titlebar metrics. Subscribe before reading the initial descriptor; reject late initial state after a newer event. Observe actual WCO geometry on both edges, reserve macOS traffic lights, restore space in fullscreen, and render original-IPC caption buttons only when the host requests custom controls (WSLg). Keep blank native drag space, mark interactive controls no-drag, and keep tab strips aligned with their pane boundaries after reservations.
+
+For installer handoff, only withdraw its Dock tile after successful desktop readiness, then exit as before; preserve the installer on launch failure. Do not globally hide Dock recents or change app identity.
+
+Verification: failing pure host-state/geometry tests first; actual renderer layout fixtures for macOS, Windows, Linux and WSLg; real macOS preview using an existing signed native host and isolated renderer data, without sending prompts or replacing the active app. Run app tests and mock/native builds, original caption-control tests and Rust installer tests. Rebuild a private 047 DMG, verify image/signature/embedded sources, record 047 and source inventory. Windows/Linux real OS and native end-to-end first-install Dock behavior remain separate acceptance items if unavailable here. Remove temporary app staging after packaging to avoid duplicate search entries.
+
+Completed: common native window frame and host geometry adaptation; 290 app, 4 Sites, 30 host window, 128 installer Rust tests (2 ignored); native/mock builds and 15 original-source checks; real macOS sidebar/fullscreen plus simulated cross-platform geometry. Private 047 DMG signed/ad-hoc and archive/static renderer verified. Current installation untouched; temporary apps/staging removed. Public launcher/desktop unification remains pending explicit user confirmation, because the current two-identity distribution can leave installer recents.

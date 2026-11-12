@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 150 150">
+  <title>AIWATA</title>
+  <!-- Unselected navigation variant of aiwata-app-icon.svg; same geometry and orange accent. -->
+  <path fill="#fff" d="
+    M55 14.75 H95
+    C124 14.75 135.25 26 135.25 55 V95
+    C135.25 124 124 135.25 95 135.25 H55
+    C26 135.25 14.75 124 14.75 95 V55
+    C14.75 26 26 14.75 55 14.75 Z"/>
+  <g transform="translate(75 30.5) scale(0.18856)">
+    <path fill="#000" d="
+      M0 0 C130.3 0 236 105.7 236 236 V472 H0
+      C-130.3 472 -236 366.3 -236 236 H-118
+      C-118 301.2 -65.2 354 0 354 H118 V236
+      C118 170.8 65.2 118 0 118 Z"/>
+    <path fill="#ff9500" d="M-118 118 H0 V236 H-118 Z"/>
+  </g>
+</svg>

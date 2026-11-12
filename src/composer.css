@@ -6,6 +6,7 @@
 .composer-toolbar .composer-actions > .icon-button { flex: none; }
 .composer-toolbar .composer-actions:last-child { margin-left: auto; }
 .composer-toolbar .composer-model { max-width: 156px; }
+.live-approval-control { display: contents; }
 .composer .attachment-list button { min-width: 0; max-width: 100%; }
 .composer .attachment-list button span,
 .composer .menu-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

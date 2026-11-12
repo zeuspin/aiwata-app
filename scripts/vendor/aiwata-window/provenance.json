@@ -1,0 +1,26 @@
+{
+  "repository": "zeuspin/aiwata",
+  "commit": "6631a6af2c58fc498ef01fa5cc4b222fc8682683",
+  "license": {
+    "path": "LICENSE.upstream.txt",
+    "sha256": "3358c4366a25a77a2d6c2a542bd183d72d560e23168a15b8cd6e1fdd308b0f06"
+  },
+  "modules": [
+    {
+      "path": "apps/desktop/electron/window-below.ts",
+      "sourceSha256": "a0eead9626cb1984cc811de0d466b3ba09366b38b3e84bfebf803c9f136bb5a7",
+      "output": "window-below.mjs",
+      "outputSha256": "7489768e1ff0f6a5baac2dd7191b0d028c6f32ff1c161db8567eacca7fc8f14c"
+    },
+    {
+      "path": "apps/desktop/electron/hyprland.ts",
+      "sourceSha256": "2fac1ac0e265308afee50da54d3ca1136f73b11903956cfcd1b776d230141064",
+      "output": "hyprland.mjs",
+      "outputSha256": "5a2afedd8aebdffce43a34c12548b0b8fb69aef9c6d52789949227c24714905f"
+    }
+  ],
+  "dependencies": {
+    "get-windows": "9.3.0"
+  },
+  "sync": "node scripts/sync-desktop-window.mjs [upstream-checkout] [commit]"
+}

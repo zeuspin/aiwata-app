@@ -1,12 +1,20 @@
-import { markerColors, markerDetails } from './conversation-meta.mjs'
+import { browserPatch, browserState, browserTabId, restoreBrowserActions, toolEditsFor, toolType } from './tool-tabs.mjs'
+import { desktopEventPatch } from './desktop-events.mjs'
+import { mergeConnectionRequest } from './connection-request.mjs'
+import { randomProjectMarker, markerDetails } from './conversation-meta.mjs'
 import { getBotAppearance } from './bot-appearance.mjs'
-import { accounts, createChat, seedAccount, tools } from './fixtures.mjs'
+import { accounts as demoAccounts, createChat, seedAccount, tools } from './fixtures.mjs'
 import { closeTabs, conversationSection, insertTab } from './tabs.mjs'
 import { createMockAgent, projectAgentEvent } from './agent-session.mjs'
 import { resolveGroupMembers } from './management.mjs'
-import { emptyBrowserState, recordBrowserAction, toolEditDefaults } from './tool-surfaces.mjs'
-import { attachmentIds, hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
+import { editBrowserAnnotation, recordBrowserAction, toolEditDefaults } from './tool-surfaces.mjs'
+import { attachmentIds, hasPromptContent, isLocalAttachment, liveMediaSlots } from './local-attachments.mjs'
 import { attachmentSizeLimit, models } from './composer.mjs'
+import { gatewayDraftFingerprint, gatewayEvent, gatewayProject, gatewayRequest, gatewayTranscript } from './live-aiwata.mjs'
+import { addFilePreview, artifactReference } from './file-previews.mjs'
+import { addWebPreview, gatewayBrowserActions, webPreviewReference } from './web-preview.mjs'
+import { gatewayGroup } from './live-room-state.mjs'
+import { consumeBrowserAnnotations, annotationBatchKey, annotationLegacyBatchKey, annotationDestination, annotationDraftPrompt, annotationImageFile, nextBrowserAnnotationNumber } from './browser-annotation-state.mjs'
 
 export const railWidth = 50
 export const contextBreakpoint = 880
@@ -47,11 +55,7 @@ export function viewAtWidth(view, width, sidebar) {
   return view === 'split' && sidebar && width < contextBreakpoint ? 'replace' : view
 }
 
-function defaultProjectMarker(projects) {
-  const usedColors = new Set(projects.filter(project => project.marker?.kind === 'color').map(project => project.marker.value))
-  const [value] = markerColors.find(([color]) => !usedColors.has(color)) ?? markerColors[projects.length % markerColors.length]
-  return { kind: 'color', value }
-}
+
 
 export function setChatArchived(workspace, id, archived) {
   const record = workspace.current()
@@ -64,6 +68,22 @@ export function chatMoveTargets(record, chat) {
   return record.projects.filter(project => project.id !== chat.projectId && project.folder?.trim())
 }
 
+function projectForDirectory(projects, cwd) {
+  let match = null
+  let matchedLength = 0
+  let primary = false
+  for (const project of projects) {
+    for (const folder of new Set([project.folder, ...(project.folders ?? [])])) {
+      if (!folder || (cwd !== folder && !cwd?.startsWith(folder + '/'))) continue
+      if (folder.length < matchedLength || (folder.length === matchedLength && (primary || folder !== project.folder))) continue
+      match = project.id
+      matchedLength = folder.length
+      primary = folder === project.folder
+    }
+  }
+  return match
+}
+
 export function moveChatToProject(workspace, id, projectId) {
   const record = workspace.current()
   const chat = record?.chats[id]
@@ -72,21 +92,29 @@ export function moveChatToProject(workspace, id, projectId) {
   return workspace.changeChat(id, { projectId })
 }
 
-export function createWorkspace(storage, attachmentStore) {
+export function createWorkspace(storage, attachmentStore, { live = false, accounts = demoAccounts, storageNamespace } = {}) {
   const agent = createMockAgent()
+  const key = storageNamespace ?? (live ? 'aiwata-ui-live:v1:accounts' : storageKey)
   let records = {}
   try {
-    records = JSON.parse(storage?.getItem(storageKey) || '{}') || {}
+    records = JSON.parse(storage?.getItem(key) || '{}') || {}
   } catch {
     records = {}
   }
   let active = null
   let online = true
   let loginVersion = 0
+  const chatVersions = new WeakMap()
 
   function persist() {
     try {
-      storage?.setItem(storageKey, JSON.stringify(records))
+      const saveChat = ({ connectionRequest, desktopEffect, ...chat }) => chat
+      const saved = live ? Object.fromEntries(Object.entries(records).map(([id, record]) => [id, {
+        ...record, bots: record.bots.map(({ avatar, ...bot }) => bot),
+        chats: Object.fromEntries(Object.entries(record.chats).map(([id, chat]) => [id, saveChat(chat)])),
+        ...(record.newChatDraft ? { newChatDraft: saveChat(record.newChatDraft) } : {}),
+      }])) : records
+      storage?.setItem(key, JSON.stringify(saved))
       return true
     } catch {
       // The current browser session still works when local storage is unavailable.
@@ -101,15 +129,38 @@ export function createWorkspace(storage, attachmentStore) {
   function getChat(id) {
     const record = current()
     const draft = record?.newChatDraft
-    return record?.chats[id] ?? (draft?.id === id ? draft : undefined)
+    return record?.chats[id] ?? (draft?.id === id ? draft : undefined) ?? Object.values(record?.gatewayCaptureDrafts ?? {}).find(chat => chat.id === id)
+  }
+
+  function closeChats(id, strategy) {
+    const record = current()
+    if (!record) return false
+    const { remaining, active: activeChat } = closeTabs(record.openChats, record.activeChat, id, strategy)
+    record.openChats = remaining
+    record.activeChat = activeChat
+    persist()
+    return true
+  }
+
+  function deleteChat(id) {
+    const record = current()
+    if (!record || !Object.hasOwn(record.chats, id) || conversationSection(record, id) !== 'projects') return false
+    const { remaining, active: activeChat } = closeTabs(record.openChats, record.activeChat, id)
+    const chat = record.chats[id]
+    delete record.chats[id]
+    record.openChats = remaining
+    record.activeChat = activeChat
+    if (persist() && attachmentStore) removeLocal(active, id, [...attachmentIds(chat)])
+    return true
   }
 
   function changeChat(id, patch) {
     const chat = getChat(id)
     if (!chat) return false
-    const prior = attachmentStore && ['attachmentDetails', 'queue', 'messages', 'lastInput'].some(key => Object.hasOwn(patch, key))
+    const prior = attachmentStore && ['attachmentDetails', 'queue', 'messages', 'lastInput', 'gatewaySubmission', 'browser', 'toolInstances'].some(key => Object.hasOwn(patch, key))
       ? attachmentIds(chat) : null
     Object.assign(chat, patch)
+    chatVersions.set(chat, (chatVersions.get(chat) ?? 0) + 1)
     if (persist() && prior?.size) {
       const kept = attachmentIds(chat)
       removeLocal(active, id, [...prior].filter(blobId => !kept.has(blobId)))
@@ -172,6 +223,141 @@ export function createWorkspace(storage, attachmentStore) {
     return { ok: true, tooLarge, duplicate }
   }
 
+  function atomicChatPatch(chat, patch) {
+    const before = Object.fromEntries(Object.keys(patch).map(key => [key, { present: Object.hasOwn(chat, key), value: chat[key] }]))
+    Object.assign(chat, patch)
+    if (persist()) {
+      chatVersions.set(chat, (chatVersions.get(chat) ?? 0) + 1)
+      return true
+    }
+    for (const [key, entry] of Object.entries(before)) {
+      if (entry.present) chat[key] = entry.value
+      else delete chat[key]
+    }
+    return false
+  }
+
+  function annotationScope(id, tabId, url) {
+    const record = current()
+    const chat = record?.chats[id]
+    const destination = annotationDestination(record, id)
+    if (!online || !chat || !destination || !tabId || !chat.tabs.includes(tabId) || toolType(chat, tabId) !== '浏览器') return null
+    const browser = browserState(chat, tabId)
+    if (!url || browser.visited !== url) return null
+    const account = active, version = loginVersion, revision = chatVersions.get(chat)
+    const snapshot = JSON.stringify(browser)
+    const identity = JSON.stringify([destination, chat.gatewayStoredId, chat.gatewayProfile,
+      record.bots?.find(item => item.id === id)?.identity, record.bots?.find(item => item.id === id)?.profile])
+    return { account, chat, browser, destination, valid() {
+      return active === account && version === loginVersion && current() === record && getChat(id) === chat &&
+        chatVersions.get(chat) === revision && chat.tabs.includes(tabId) && toolType(chat, tabId) === '浏览器' &&
+        JSON.stringify(browserState(chat, tabId)) === snapshot &&
+        JSON.stringify([annotationDestination(record, id), chat.gatewayStoredId, chat.gatewayProfile,
+          record.bots?.find(item => item.id === id)?.identity, record.bots?.find(item => item.id === id)?.profile]) === identity
+    } }
+  }
+
+  async function saveBrowserAnnotationCapture(id, tabId, url, capture, { signal } = {}) {
+    if (signal?.aborted) return { ok: false, error: '截图操作已取消，原批注已保留。' }
+    const scope = annotationScope(id, tabId, url)
+    if (!scope || !attachmentStore || (capture?.pageUrl && capture.pageUrl !== url)) return { ok: false, error: '批注页面或目标会话已变化，请重新选择。' }
+    const { account, chat, browser } = scope
+    const existing = browser.annotations.find(pin => pin.id === browser.annotationDrafts?.[url]?.id)
+    const number = capture?.number ?? existing?.number ?? nextBrowserAnnotationNumber(browser, url)
+    if (!Number.isSafeInteger(number) || number <= 0 || (existing ? number !== existing.number : number !== nextBrowserAnnotationNumber(browser, url))) {
+      return { ok: false, error: '批注编号已变化，请重新截图。' }
+    }
+    const file = annotationImageFile(capture, number)
+    if (!file?.size || file.size > attachmentSizeLimit) return { ok: false, error: '截图无效或超过附件大小限制。' }
+    const blobId = crypto.randomUUID()
+    try { await attachmentStore.save(account, id, [{ id: blobId, file }]) }
+    catch { return { ok: false, error: '截图保存失败，原批注已保留。' } }
+    if (signal?.aborted || !scope.valid()) {
+      removeLocal(account, id, [blobId])
+      return { ok: false, error: signal?.aborted ? '截图操作已取消，原批注已保留。' : '批注页面或目标会话已变化，请重新选择。' }
+    }
+    const { imageDataUrl, image: ignoredImage, ...metadata } = capture
+    const image = { blobId, name: file.name, kind: 'image', type: file.type, size: file.size }
+    const savedCapture = { ...metadata, number, image }
+    const updated = editBrowserAnnotation(browser, url, { open: true, capture: savedCapture,
+      target: capture.identity?.selector || (capture.kind === 'area' ? '框选区域' : '所选元素') })
+    const prior = attachmentIds(chat)
+    if (!atomicChatPatch(chat, browserPatch(chat, updated, tabId))) {
+      removeLocal(account, id, [blobId])
+      return { ok: false, error: '批注保存失败，原批注已保留。' }
+    }
+    const kept = attachmentIds(chat)
+    removeLocal(account, id, [...prior].filter(blobId => !kept.has(blobId)))
+    return { ok: true, capture: savedCapture }
+  }
+
+  async function addBrowserAnnotationsToDraft({ accountId, chatId: id, tabId, url, pinIds, destinationLabel, consume = false } = {}) {
+    const scope = annotationScope(id, tabId, url)
+    if (!scope || accountId !== active || destinationLabel !== scope.destination.label) return { ok: false, error: '目标会话已变化，请重新确认。' }
+    const { account, chat, browser } = scope
+    const applyDraftPatch = patch => {
+      const prior = attachmentIds(chat)
+      if (!atomicChatPatch(chat, patch)) return false
+      const retained = attachmentIds(chat)
+      removeLocal(account, id, [...prior].filter(blobId => !retained.has(blobId)))
+      return true
+    }
+    const pagePins = browser.annotations.filter(pin => pin.url === url)
+    if (pinIds !== undefined && (!Array.isArray(pinIds) || new Set(pinIds).size !== pinIds.length)) return { ok: false, error: '批注选择无效。' }
+    const pins = pinIds === undefined ? pagePins : pinIds.map(id => pagePins.find(pin => pin.id === id))
+    if (!pins.length || pins.some(pin => !pin || typeof pin.text !== 'string' || (!pin.capture && !pin.text.trim()))) return { ok: false, error: '批注已变化，请重新选择。' }
+    const receipt = annotationBatchKey(tabId, url, pins)
+    const previousReceipt = chat.browserAnnotationDeliveries?.[receipt] ??
+      chat.browserAnnotationDeliveries?.[annotationLegacyBatchKey(tabId, url, pins)]
+    const currentImages = new Set((chat.attachments ?? []).map(name => chat.attachmentDetails?.[name]?.blobId).filter(Boolean))
+    if (previousReceipt) {
+      const imageIds = previousReceipt === true ? pins.map(pin => pin.capture?.image?.blobId).filter(Boolean) : previousReceipt.imageIds ?? []
+      const prompt = previousReceipt === true
+        ? annotationDraftPrompt(url, pins, new Map(pins.filter(pin => pin.capture?.image).map(pin => [pin.id, pin.capture.image.name])))
+        : previousReceipt.prompt
+      const withoutImageNames = text => text.replace(/^附件: .*$/gm, '').trim()
+      const promptPresent = prompt && (chat.draft.includes(prompt) || (previousReceipt === true &&
+        withoutImageNames(chat.draft).includes(withoutImageNames(prompt))))
+      if (promptPresent || imageIds.some(id => currentImages.has(id))) {
+        if (consume && !applyDraftPatch(browserPatch(chat, consumeBrowserAnnotations(browser, url, pins), tabId))) return { ok: false, error: '批注状态保存失败，请重试。' }
+        return { ok: true, duplicate: true }
+      }
+    }
+    const draftSnapshot = JSON.stringify([chat.draft, chat.attachments, chat.attachmentDetails])
+    try {
+      const images = await Promise.all(pins.filter(pin => pin.capture).map(async pin => {
+        const image = pin.capture.image
+        if (!image?.blobId || !attachmentStore) throw Error('missing image')
+        const file = await attachmentStore.read(account, id, image.blobId)
+        if (!file?.size || !file.type?.startsWith('image/') || file.size !== image.size) throw Error('missing image')
+        return { pin, image }
+      }))
+      if (!scope.valid() || JSON.stringify([chat.draft, chat.attachments, chat.attachmentDetails]) !== draftSnapshot) {
+        return { ok: false, error: '页面、批注或目标草稿已变化，请重新确认。' }
+      }
+      const attachments = [...chat.attachments]
+      const attachmentDetails = { ...chat.attachmentDetails }
+      const filenames = new Map()
+      for (const { pin, image } of images) {
+        const extension = image.type === 'image/jpeg' ? 'jpg' : image.type === 'image/webp' ? 'webp' : 'png'
+        const base = `网页批注-${pin.number}`
+        let name = `${base}.${extension}`, suffix = 2
+        while (attachments.includes(name) || Object.hasOwn(attachmentDetails, name)) name = `${base}-${suffix++}.${extension}`
+        attachments.push(name)
+        attachmentDetails[name] = { ...image, name }
+        filenames.set(pin.id, name)
+      }
+      const prompt = annotationDraftPrompt(url, pins, filenames)
+      const patch = { ...(consume ? browserPatch(chat, consumeBrowserAnnotations(browser, url, pins), tabId) : {}),
+        draft: chat.draft ? chat.draft + '\n\n' + prompt : prompt, attachments, attachmentDetails,
+        browserAnnotationDeliveries: { ...chat.browserAnnotationDeliveries, [receipt]: { prompt, imageIds: images.map(({ image }) => image.blobId) } }, retryDemo: null }
+      if (!applyDraftPatch(patch)) return { ok: false, error: '草稿保存失败，批注和原草稿已保留。' }
+      return { ok: true }
+    } catch {
+      return { ok: false, error: '截图读取失败，批注和原草稿已保留，请重新截图后重试。' }
+    }
+  }
+
   async function readLocalAttachment(id, blobId) {
     const account = active
     const version = loginVersion
@@ -180,11 +366,47 @@ export function createWorkspace(storage, attachmentStore) {
     return version === loginVersion && getChat(id) ? file ?? null : null
   }
 
+  async function saveLocalToolMedia(id, file, slot) {
+    const account = active
+    const version = loginVersion
+    const chat = getChat(id)
+    if (!live || !chat || !attachmentStore || !liveMediaSlots.includes(slot) || !file.size || file.size > attachmentSizeLimit) return false
+    const blobId = crypto.randomUUID()
+    await attachmentStore.save(account, id, [{ id: blobId, file }])
+    if (version !== loginVersion || getChat(id) !== chat || chat.archived) {
+      removeLocal(account, id, [blobId])
+      return false
+    }
+    const previous = chat.toolEdits
+    const entry = { name: file.name, kind: file.type.startsWith('image/') ? 'image' : 'file', type: file.type, size: file.size, blobId }
+    chat.toolEdits = { ...previous, [slot]: entry, ...(slot === 'liveImageSource' ? { imageEditSource: slot } : {}) }
+    if (!persist()) {
+      chat.toolEdits = previous
+      removeLocal(account, id, [blobId])
+      return false
+    }
+    const old = previous?.[slot]?.blobId
+    if (old && !attachmentIds(chat).has(old)) removeLocal(account, id, [old])
+    return true
+  }
+
+  function attachLocalToolMedia(id, slot) {
+    const chat = getChat(id)
+    const entry = chat?.toolEdits?.[slot]
+    if (!entry || chat.archived || chat.attachments.includes(entry.name)) return false
+    const before = { attachments: chat.attachments, attachmentDetails: chat.attachmentDetails }
+    Object.assign(chat, { attachments: [...chat.attachments, entry.name],
+      attachmentDetails: { ...chat.attachmentDetails, [entry.name]: entry } })
+    if (persist()) return true
+    Object.assign(chat, before)
+    return false
+  }
+
   function logout() {
     const record = current()
     if (record) {
       agent.dispose()
-      for (const chat of Object.values(record.chats)) resetRun(chat)
+      if (!live) for (const chat of Object.values(record.chats)) resetRun(chat)
       active = null
       loginVersion += 1
       persist()
@@ -205,15 +427,21 @@ export function createWorkspace(storage, attachmentStore) {
     if (!online || !accounts.some(account => account.id === id)) return false
     if (active === id) return true
     logout()
-    const record = records[id] ??= seedAccount(id)
+    const record = records[id] ??= live ? {
+      projects: [], bots: [], groups: [], assets: [], chats: {}, openChats: [], credits: 0, usage: [],
+    } : seedAccount(id)
+    if (live) {
+      record.tasks ??= []
+      record.connectors ??= []
+    }
     for (const project of record.projects) {
-      if (!markerDetails(project.marker)) project.marker = defaultProjectMarker(record.projects)
+      if (!markerDetails(project.marker)) project.marker = randomProjectMarker(record.projects)
     }
     for (const group of record.groups) {
       if (!Array.isArray(group.members)) group.members = resolveGroupMembers(group, record.bots)
     }
     const chats = Object.values(record.chats)
-    for (const chat of chats) resetRun(chat)
+    if (!live) for (const chat of chats) resetRun(chat)
     if (!Array.isArray(record.openChats)) {
       const initial = chats.find(chat => chat.messages.length && conversationSection(record, chat.id) === 'projects')
       record.openChats = initial ? [initial.id] : []
@@ -250,18 +478,23 @@ export function createWorkspace(storage, attachmentStore) {
       ...(group ? { threadId: reply?.threadId ?? runId, discussionId: runId, reply } : {}) }
   }
 
-  function admitPrompt(id, input, patch) {
+  function admitPrompt(id, input, patch, receipt) {
     const record = current()
     const chat = getChat(id)
     if (!chat || !input || !hasPromptContent(input) || chat.pending) return { ok: false, reason: 'unavailable' }
-    const result = charge({ id: input.runId, kind: 'Agent 会话', source: input.source, amount: 12 }, false)
+    const result = receipt ? { ok: true, charged: 0 } : charge({ id: input.runId, kind: 'Agent 会话', source: input.source, amount: 12 }, false)
     if (!result.ok) return result
     if (record.newChatDraft === chat) {
       record.chats[id] = chat
       delete record.newChatDraft
     }
+    if (chat.gatewayCaptureKey && record.gatewayCaptureDrafts?.[chat.gatewayCaptureKey] === chat) {
+      record.chats[id] = chat
+      delete record.gatewayCaptureDrafts[chat.gatewayCaptureKey]
+    }
     changeChat(id, {
       ...patch, pending: input.runId, agentRun: null, lastInput: input,
+      ...(receipt ? { gatewayAdmission: receipt.admission_id, gatewayGeneration: receipt.execution_generation } : {}),
       activity: { ...chat.activity, needsInput: false },
       title: chat.title === '新聊天' ? (input.text || input.attachments[0]).slice(0, 24) : chat.title,
       messages: [...chat.messages, { role: 'user', text: input.text, attachments: input.attachments, attachmentDetails: input.attachmentDetails,
@@ -270,8 +503,213 @@ export function createWorkspace(storage, attachmentStore) {
     return result
   }
 
+  function hydrateGatewayChat(id, snapshot, extra = {}) {
+    const chat = getChat(id)
+    if (!live || !chat) return false
+    const info = snapshot.info ?? {}
+    const savedRequest = snapshot.open_requests?.find(request => ['approval', 'clarify'].includes(request.method))
+    const prompt = snapshot.prompts?.[0]
+    const request = savedRequest ? gatewayRequest(savedRequest.method, savedRequest.params, savedRequest.id)
+      : prompt && gatewayRequest(prompt.kind, prompt)
+    const unknown = snapshot.pending?.find(item => item.status === 'unknown')
+    const pending = snapshot.running || Boolean(snapshot.pending?.length || request)
+    const transcript = gatewayTranscript(snapshot, { pending, files: !chat.gatewayRoom })
+    const run = pending ? { text: '', tools: {}, children: {}, todos: [], segments: {}, ...chat.agentRun, request } : null
+    if (run) run.tools = { ...run.tools, ...transcript.pendingTools }
+    if (run && transcript.pendingFiles.length) run.filePreviews = transcript.pendingFiles.reduce(addFilePreview, run.filePreviews)
+    if (run && transcript.pendingPages.length) run.webPreviews = transcript.pendingPages.reduce(addWebPreview, run.webPreviews)
+    const projectId = chat.gatewayProfile ? null : info.cwd === undefined ? chat.projectId : projectForDirectory(current().projects, info.cwd)
+    const agentActions = chat.gatewayRoom ? [] : gatewayBrowserActions(snapshot.messages ?? [])
+    return changeChat(id, {
+      ...extra, gatewayId: snapshot.session_id, gatewayStoredId: snapshot.stored_session_id ?? snapshot.session_id,
+      ...(Object.hasOwn(snapshot, 'pending_connection') ? { connectionRequest: mergeConnectionRequest(null, snapshot.pending_connection, { replace: true }) } : {}),
+      gatewayEpoch: snapshot.replay_epoch, gatewayGeneration: snapshot.execution_generation,
+      gatewaySeq: pending && chat.pending && chat.gatewayEpoch === snapshot.replay_epoch
+        ? (chat.gatewaySeq ?? 0) : (snapshot.last_sequence ?? 0),
+      source: 'own', model: info.model ?? chat.model,
+      projectId, title: chat.gatewayProfile ? chat.title : info.title || chat.title,
+      messages: transcript.messages, pending: pending ? (chat.pending ?? snapshot.pending?.[0]?.admission_id ?? snapshot.session_id) : null,
+      gatewayUnknown: unknown ? { admissionId: unknown.admission_id, generation: unknown.execution_generation } : null,
+      agentRun: run, activity: { ...chat.activity, needsInput: Boolean(request || unknown) },
+      ...(agentActions.length ? restoreBrowserActions(chat, agentActions) : {}),
+    })
+  }
+
   return {
-    login, logout, current, getChat, charge, changeChat, agent, addLocalAttachments, readLocalAttachment,
+    login, logout, current, getChat, charge, changeChat, agent, addLocalAttachments, readLocalAttachment, saveLocalToolMedia, attachLocalToolMedia, hydrateGatewayChat, saveBrowserAnnotationCapture, addBrowserAnnotationsToDraft,
+    syncGatewayRooms(rooms) {
+      const record = current()
+      if (!live || !record) return false
+      const previous = new Map(record.groups.map(group => [group.id, group]))
+      record.groups = rooms.map(room => gatewayGroup(room, null, null, previous.get(room.room_id)))
+      const ids = new Set(record.groups.map(group => group.id))
+      for (const [id] of previous) {
+        if (ids.has(id)) continue
+        const chat = record.chats[id]
+        closeChats(id, 'one')
+        delete record.chats[id]
+        if (chat) removeLocal(active, id, [...attachmentIds(chat)])
+      }
+      for (const group of record.groups) {
+        const chat = record.chats[group.id] ??= createChat(group.id, group.name)
+        Object.assign(chat, { title: group.name, gatewayRoom: true, source: 'own' })
+      }
+      return persist()
+    },
+    updateGatewayRoomSettings(snapshot) {
+      const record = current()
+      const index = record?.groups.findIndex(group => group.id === snapshot.room.room_id)
+      if (!live || index == null || index < 0) return false
+      record.groups[index] = gatewayGroup(snapshot.room, snapshot.context, snapshot.driver_status, record.groups[index])
+      return changeChat(snapshot.room.room_id, { title: snapshot.room.name })
+    },
+    applyGatewayRoom(id, snapshot, state, viewed) {
+      const record = current()
+      const chat = getChat(id)
+      if (!chat?.gatewayRoom || snapshot.room.room_id !== id) return false
+      const index = record.groups.findIndex(group => group.id === id)
+      if (index < 0) return false
+      record.groups[index] = gatewayGroup(snapshot.room, snapshot.context, snapshot.driver_status, record.groups[index])
+      const room = { statuses: state.statuses, paused: state.paused }
+      const pending = state.working || state.paused || state.approvals.length > 0
+      return changeChat(id, { title: snapshot.room.name, messages: state.messages, pending: pending ? id : null,
+        agentRun: pending ? { room } : null, roomOutcome: room,
+        roomApprovals: state.approvals, roomAttempts: state.attempts, roomReady: state.ready, roomError: state.error,
+        activity: { ...chat.activity, needsInput: Boolean(state.approvals.length || state.attempts.length || state.paused) },
+        unread: viewed ? false : chat.unread || state.messages.length > chat.messages.length,
+      })
+    },
+    acceptGatewayRoomSend(id, attempt) {
+      const chat = getChat(id)
+      if (!chat?.gatewayRoom || chat.gatewayRoomSubmission !== attempt) return false
+      const sameDraft = gatewayDraftFingerprint(chat.draft, chat.attachments, chat.attachmentDetails) === attempt.fingerprint &&
+        chat.groupReply?.messageId === attempt.replyId
+      return changeChat(id, { gatewayRoomSubmission: null,
+        ...(sameDraft ? { draft: '', attachments: [], attachmentDetails: {}, groupReply: null } : {}),
+      })
+    },
+    syncGatewayBots(bots) {
+      const record = current()
+      if (!live || !record || !Array.isArray(bots)) return false
+      const previous = record.bots
+      record.bots = bots.map(bot => ({ ...bot, id: 'bot:' + bot.profile }))
+      const currentBots = new Map(record.bots.map(bot => [bot.id, bot]))
+      for (const bot of previous) {
+        const currentBot = currentBots.get(bot.id)
+        if (currentBot && (!bot.identity || !currentBot.identity || bot.identity === currentBot.identity)) continue
+        const chat = record.chats[bot.id]
+        const { remaining, active: activeChat } = closeTabs(record.openChats, record.activeChat, bot.id)
+        record.openChats = remaining
+        record.activeChat = activeChat
+        delete record.chats[bot.id]
+        if (record.management?.tasks) record.management.tasks = record.management.tasks.filter(task => task.profile !== bot.id)
+        if (chat) removeLocal(active, bot.id, [...attachmentIds(chat)])
+      }
+      for (const bot of record.bots) {
+        const chat = record.chats[bot.id] ??= createChat(bot.id, bot.name)
+        const changed = bot.canonicalId && chat.gatewayStoredId && bot.canonicalId !== chat.gatewayStoredId
+        Object.assign(chat, { title: bot.name, gatewayProfile: bot.profile, source: 'own', projectId: null,
+          ...(bot.canonicalId ? { gatewayStoredId: bot.canonicalId } : {}),
+          ...(changed ? { gatewayId: null, gatewaySeq: 0, pending: null, gatewayUnknown: null,
+            gatewayAdmission: null, gatewaySubmission: null, agentRun: null, messages: [] } : {}),
+        })
+      }
+      return persist()
+    },
+    syncGatewayInventory(projects, sessions = [], { complete = false } = {}) {
+      const record = current()
+      if (!live || !record) return false
+      record.projects = projects.map(gatewayProject).filter(project => !project.archived)
+      const projectIds = new Set(record.projects.map(project => project.id))
+      for (const chat of Object.values(record.chats)) if (!projectIds.has(chat.projectId)) chat.projectId = null
+      const byGatewayId = new Map(Object.values(record.chats).filter(chat => !chat.gatewayProfile && !chat.gatewayRoom).map(chat => [chat.gatewayStoredId, chat]))
+      const listed = new Set()
+      const captureStoredIds = new Set(Object.values(record.gatewayCaptureDrafts ?? {}).map(chat => chat.gatewayStoredId).filter(Boolean))
+      for (const item of sessions) {
+        const id = item.id ?? item.session_id
+        if (id) listed.add(id)
+        if (id && (id === record.newChatDraft?.gatewayStoredId || captureStoredIds.has(id))) continue
+        if (!id || item.source === 'bot_room' || (!item.message_count && !item.running && !byGatewayId.has(id))) continue
+        const chat = byGatewayId.get(id) ?? (record.chats[id] ??= createChat(id, item.title || '新聊天'))
+        Object.assign(chat, { gatewayStoredId: id, title: item.title || chat.title, model: item.model ?? chat.model,
+          gatewayUpdatedAt: item.updated_at ?? item.created_at ?? chat.gatewayUpdatedAt,
+          ...(item.cwd === undefined ? {} : { projectId: projectForDirectory(record.projects, item.cwd) }),
+          source: 'own', ...(item.archived === undefined ? {} : { archived: item.archived }) })
+        if (chat.archived && record.openChats.includes(chat.id)) closeChats(chat.id, 'one')
+      }
+      if (complete) {
+        for (const [id, chat] of byGatewayId) {
+          if (id && !chat.pending && !listed.has(id)) deleteChat(chat.id)
+        }
+      }
+      return persist()
+    },
+    acceptGatewayPrompt(id, input, receipt) {
+      const chat = getChat(id)
+      if (!live || !chat || !receipt?.admission_id) return false
+      const sameDraft = !input.preserveDraft && chat.draft.trim() === input.text && (!input.attachments || chat.attachments === input.attachments)
+      const patch = sameDraft ? { draft: '', gatewaySubmission: null, attachments: [], attachmentDetails: {} }
+        : { gatewaySubmission: null }
+      return admitPrompt(id, { attachments: [], ...input, source: 'own' }, patch, receipt).ok
+    },
+    recoverGatewayPrompt(id, attempt, receipt, snapshot) {
+      const record = current()
+      const chat = getChat(id)
+      if (!live || !receipt?.admission_id || !chat || chat.gatewaySubmission !== attempt || !attempt.input) return false
+      const { text, attachments, attachmentDetails } = attempt.input
+      const sameDraft = !attempt.input.preserveDraft && gatewayDraftFingerprint(chat.draft, chat.attachments, chat.attachmentDetails) ===
+        gatewayDraftFingerprint(text, attachments, attachmentDetails)
+      if (record.newChatDraft === chat) {
+        record.chats[id] = chat
+        delete record.newChatDraft
+      }
+      if (chat.gatewayCaptureKey && record.gatewayCaptureDrafts?.[chat.gatewayCaptureKey] === chat) {
+        record.chats[id] = chat
+        delete record.gatewayCaptureDrafts[chat.gatewayCaptureKey]
+      }
+      return hydrateGatewayChat(id, snapshot, {
+        gatewaySubmission: null, gatewayAdmission: receipt.admission_id,
+        lastInput: { ...attempt.input, runId: attempt.id, source: 'own' },
+        ...(sameDraft ? { draft: '', attachments: [], attachmentDetails: {} } : {}),
+      })
+    },
+    applyGatewayFrame(id, frame, viewed) {
+      const chat = getChat(id)
+      if (!live || !chat) return false
+      const event = frame.params ?? {}
+      if (event.seq != null && event.replay_epoch === chat.gatewayEpoch && event.seq <= (chat.gatewaySeq ?? 0)) return false
+      const cursor = event.seq == null ? {} : { gatewaySeq: event.seq, gatewayEpoch: event.replay_epoch ?? chat.gatewayEpoch }
+      const generation = event.execution_generation ?? event.payload?.execution_generation
+      if (generation != null && (chat.gatewayGeneration == null || generation >= chat.gatewayGeneration)) cursor.gatewayGeneration = generation
+      if (event.type === 'session.title') return changeChat(id, { ...cursor, title: chat.gatewayProfile ? chat.title : event.payload?.title || chat.title })
+      if (generation != null && chat.gatewayGeneration != null && generation < chat.gatewayGeneration) return false
+      const desktopPatch = desktopEventPatch(chat, event.type, event.payload, viewed)
+      if (desktopPatch && !chat.gatewayRoom) return changeChat(id, { ...cursor, ...desktopPatch })
+      if (!chat.pending) return false
+      if (event.type === 'preview.open') {
+        if (chat.gatewayRoom || (event.admission_id && chat.gatewayAdmission && event.admission_id !== chat.gatewayAdmission)) return false
+        const page = webPreviewReference(event.payload)
+        const preview = page ?? artifactReference(event.payload)
+        const patch = { ...cursor, ...projectAgentEvent(chat, { type: page ? 'web.preview' : 'file.preview', data: preview }, viewed) }
+        if (page) {
+          Object.assign(patch, browserPatch(chat, recordBrowserAction(browserState(chat), page)))
+          if (viewed) {
+            const tabId = browserTabId(chat) ?? '浏览器'
+            Object.assign(patch, { tabs: insertTab(chat.tabs, tabId), tool: tabId,
+              view: chat.view === 'hidden' ? 'split' : chat.view })
+          }
+        }
+        return changeChat(id, patch)
+      }
+      const kind = { 'approval.request': 'approval', 'clarify.request': 'clarify' }[event.type]
+      const request = kind ? gatewayRequest(kind, event.payload) : gatewayRequest(frame.method, event, frame.id)
+      if (['approval.settled', 'clarify.settled'].includes(event.type) && chat.agentRun?.request?.id === event.payload?.prompt_id) {
+        return changeChat(id, { ...cursor, agentRun: { ...chat.agentRun, request: null }, activity: { ...chat.activity, needsInput: false } })
+      }
+      if (event.type === 'message.start') return changeChat(id, cursor)
+      const patch = projectAgentEvent(chat, request ?? gatewayEvent(event), viewed)
+      return patch ? changeChat(id, { ...cursor, ...patch }) : false
+    },
     updateNavigation(patch) {
       const record = current()
       if (!record) return false
@@ -401,17 +839,22 @@ export function createWorkspace(storage, attachmentStore) {
       if (!chat || chat.pending || chat.draft.length) return false
       return changeChat(id, { draft: prompt, retryDemo: null })
     },
-    updateBrowser(id, update) {
+    updateBrowser(id, update, tabId) {
       const chat = current()?.chats[id]
-      if (!chat) return false
-      const previous = chat.browser ?? emptyBrowserState
+      if (!chat || (tabId && (!chat.tabs.includes(tabId) || toolType(chat, tabId) !== '浏览器'))) return false
+      const previous = browserState(chat, tabId ?? browserTabId(chat))
       const browser = update(previous)
-      return browser !== previous && changeChat(id, { browser })
+      return browser !== previous && changeChat(id, browserPatch(chat, browser, tabId ?? browserTabId(chat)))
     },
-    updateToolEdits(id, update) {
+    updateToolEdits(id, update, tabId) {
       const chat = current()?.chats[id]
-      if (!chat) return false
-      const patch = update({ ...toolEditDefaults, ...chat.toolEdits })
+      if (!chat || (tabId && !chat.tabs.includes(tabId))) return false
+      const previous = toolEditsFor(chat, tabId)
+      const patch = update({ ...toolEditDefaults, ...previous })
+      if (tabId && chat.toolInstances?.[tabId]) {
+        return changeChat(id, { toolInstances: { ...chat.toolInstances,
+          [tabId]: { ...chat.toolInstances[tabId], toolEdits: { ...previous, ...patch } } } })
+      }
       return changeChat(id, { toolEdits: { ...chat.toolEdits, ...patch } })
     },
     addProject(name, folders, { trusted = false, marker } = {}) {
@@ -420,7 +863,7 @@ export function createWorkspace(storage, attachmentStore) {
       const [folder, ...additional] = [...new Set(paths.map(path => path?.trim()).filter(Boolean))]
       if (!record || !name.trim() || !folder || (marker != null && !markerDetails(marker))) return null
       const project = { id: crypto.randomUUID(), name: name.trim(), folder, trusted,
-        marker: marker ?? defaultProjectMarker(record.projects) }
+        marker: marker ?? randomProjectMarker(record.projects) }
       record.projects.push(project)
       if (additional.length) {
         const management = record.management ?? {}
@@ -428,6 +871,17 @@ export function createWorkspace(storage, attachmentStore) {
       }
       persist()
       return project
+    },
+    openGatewayCaptureDraft(key, projectId) {
+      const record = current()
+      if (!live || !record || typeof key !== 'string' || !key) return null
+      const captures = record.gatewayCaptureDrafts ??= Object.create(null)
+      if (Object.hasOwn(captures, key)) return captures[key]
+      const chat = createChat(crypto.randomUUID(), '新聊天', projectId)
+      chat.gatewayCaptureKey = key
+      record.gatewayCaptureDrafts = { ...captures, [key]: chat }
+      persist()
+      return chat
     },
     openChatDraft(projectId) {
       const record = current()
@@ -461,41 +915,41 @@ export function createWorkspace(storage, attachmentStore) {
       persist()
       return true
     },
-    closeChats(id, strategy) {
-      const record = current()
-      if (!record) return false
-      const { remaining, active } = closeTabs(record.openChats, record.activeChat, id, strategy)
-      record.openChats = remaining
-      record.activeChat = active
-      persist()
-      return true
-    },
-    deleteChat(id) {
-      const record = current()
-      if (!record || !Object.hasOwn(record.chats, id) || conversationSection(record, id) !== 'projects') return false
-      const { remaining, active: activeChat } = closeTabs(record.openChats, record.activeChat, id)
-      const chat = record.chats[id]
-      delete record.chats[id]
-      record.openChats = remaining
-      record.activeChat = activeChat
-      if (persist() && attachmentStore) removeLocal(active, id, [...attachmentIds(chat)])
-      return true
-    },
+    closeChats, deleteChat,
     renameChat(id, title) {
       return !!title.trim() && changeChat(id, { title: title.trim() })
     },
-    openTool(id, tool, after, { reveal = true } = {}) {
+    openTool(id, tool, after, { reveal = true, newInstance = false } = {}) {
       const chat = current()?.chats[id]
-      if (!chat || !tools.includes(tool)) return false
-      const tabs = insertTab(chat.tabs, tool, after)
-      return changeChat(id, { tabs, tool, view: reveal && chat.view === 'hidden' ? 'split' : chat.view })
+      const type = toolType(chat, tool)
+      if (!chat || !type) return false
+      const multiple = ['浏览器', '终端'].includes(type)
+      let tabId = tool
+      let toolInstances = chat.toolInstances
+      if (newInstance && multiple) {
+        tabId = type + ':' + crypto.randomUUID()
+        toolInstances = { ...toolInstances, [tabId]: { type } }
+      } else if (tool === '浏览器') {
+        tabId = browserTabId(chat) ?? tool
+      } else if (tool === '终端') {
+        tabId = (toolType(chat, chat.tool) === type ? chat.tool : chat.tabs.findLast(id => toolType(chat, id) === type)) ?? tool
+      } else if (!tools.includes(tool) && !chat.tabs.includes(tool)) return false
+      const tabs = insertTab(chat.tabs, tabId, after)
+      return changeChat(id, { tabs, tool: tabId, ...(toolInstances ? { toolInstances } : {}),
+        view: reveal && chat.view === 'hidden' ? 'split' : chat.view })
+    },
+    selectTool(id, tabId) {
+      const chat = current()?.chats[id]
+      if (!chat?.tabs.includes(tabId) || !toolType(chat, tabId)) return false
+      return changeChat(id, { tool: tabId, view: chat.view === 'hidden' ? 'split' : chat.view })
     },
     closeTools(id, target, strategy) {
       const chat = current()?.chats[id]
       if (!chat) return false
       const { remaining, active } = closeTabs(chat.tabs, chat.tool, target, strategy)
       const toolTitles = Object.fromEntries(Object.entries(chat.toolTitles ?? {}).filter(([tool]) => remaining.includes(tool)))
-      return changeChat(id, { tabs: remaining, tool: active, view: remaining.length ? chat.view : 'hidden', toolTitles })
+      const toolInstances = Object.fromEntries(Object.entries(chat.toolInstances ?? {}).filter(([id]) => remaining.includes(id)))
+      return changeChat(id, { tabs: remaining, tool: active, view: remaining.length ? chat.view : 'hidden', toolTitles, toolInstances })
     },
     renameTool(id, tool, title) {
       const chat = current()?.chats[id]
@@ -552,11 +1006,12 @@ export function createWorkspace(storage, attachmentStore) {
       if (!chat || chat.pending !== runId) return false
       const patch = projectAgentEvent(chat, frame, viewed)
       if (frame.type === 'preview.open') {
-        patch.browser = recordBrowserAction(chat.browser ?? emptyBrowserState, frame.data)
+        Object.assign(patch, browserPatch(chat, recordBrowserAction(browserState(chat), frame.data)))
       }
       return patch ? changeChat(id, patch) : false
     },
     recoverOrphanedAgentRuns() {
+      if (live) return false
       const record = current()
       if (!record) return false
       const orphans = Object.values(record.chats).filter(chat =>

@@ -1,3 +1,6 @@
+import { addFilePreview } from './file-previews.mjs'
+import { addWebPreview } from './web-preview.mjs'
+
 export const demoPrompts = [
   ['流式回复和任务进度', '整理当前项目的交付清单'],
   ['审批卡片', '演示审批：预览发布脚本的执行申请'],
@@ -234,6 +237,12 @@ export function projectAgentEvent(chat, frame, viewed) {
   }
   if (type === 'todo.updated') return { agentRun: { ...run, todos: data.todos } }
   if (type === 'preview.open') return { agentRun: { ...run, preview: data } }
+  if (type === 'file.preview' && data) {
+    return { agentRun: { ...run, filePreviews: addFilePreview(run.filePreviews, data) } }
+  }
+  if (type === 'web.preview' && data) {
+    return { agentRun: { ...run, webPreviews: addWebPreview(run.webPreviews, data) } }
+  }
   if (type === 'room.event' && data.kind === 'room.routed') {
     return { agentRun: { ...run, room: { statuses: Object.fromEntries(data.members.map(member => [member.id, 'queued'])) } } }
   }

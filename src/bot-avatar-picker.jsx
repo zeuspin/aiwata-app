@@ -3,6 +3,8 @@ import { BotFace } from './bot-avatar.jsx'
 import { automaticEyeColor, botBodyColors, botEyeColors, botEyeStyles, botShapes, getBotAppearance } from './bot-appearance.mjs'
 import { botPresenceLabels } from './bot-presence.mjs'
 import { botPortraits, getPortraitDesign, portraitDesignFields, randomPortraitBatch, resolveBotPortrait } from './bot-portraits.mjs'
+import { PeekingControls } from './bot-peeking-picker.jsx'
+import { getPeekingDesign } from './bot-peeking.mjs'
 import './bot-avatar-picker.css'
 
 function ColorChoices({ label, colors, value, customValue, automatic, onChange }) {
@@ -28,7 +30,7 @@ const portraitGroups = [
   ['脸部', ['face', 'skin', 'eyeColor']],
   ['衣服与背景', ['clothing', 'background']],
 ]
-const families = [['character', '几何角色'], ['portrait', '人物头像'], ['photo', '上传图片']]
+const families = [['character', '几何角色'], ['portrait', '人物头像'], ['peeking', '探头头像'], ['photo', '上传图片']]
 
 function PortraitControls({ botId, look, select }) {
   const [panel, setPanel] = useState(look.portraitDesign ? 'custom' : 'presets')
@@ -94,7 +96,8 @@ export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, o
   function selectFamily(mode) {
     setShowEmptyPhoto(mode === 'photo' && !bot.avatar)
     if (mode === 'photo' && !bot.avatar) return
-    select(mode === 'portrait' ? { mode, portrait: look.portrait ?? 'amber' } : { mode })
+    select(mode === 'portrait' ? { mode, portrait: look.portrait ?? 'amber' }
+      : mode === 'peeking' ? { mode, peekingDesign: getPeekingDesign(look.peekingDesign) } : { mode })
   }
 
   return <section className="bot-look-picker" aria-label="Bot 头像外观">
@@ -130,6 +133,10 @@ export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, o
       </div>}
       <div hidden={family !== 'portrait'}>
         {look.portrait && <PortraitControls botId={bot.id} look={look} select={select} />}
+      </div>
+      <div hidden={family !== 'peeking'}>
+        {look.peekingDesign && <PeekingControls botId={bot.id} design={look.peekingDesign} pending={pending}
+          onChange={peekingDesign => select({ peekingDesign })} />}
       </div>
       {family === 'character' && <div className="bot-look-options bot-geometry-options">
         <fieldset className="bot-look-field">

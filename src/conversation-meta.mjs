@@ -9,19 +9,27 @@ export const markerColors = [
   ['gray', '灰色', '#858986'],
 ]
 
-export const markerEmojis = [
-  ['⭐', '星星'], ['📌', '图钉'], ['🚩', '旗帜'], ['🎯', '目标'],
-  ['💡', '灵感'], ['🎨', '设计'], ['🧪', '实验'], ['📝', '笔记'],
-  ['📚', '资料'], ['🛠️', '工具'], ['🚀', '发布'], ['🐛', '缺陷'],
-  ['🔍', '排查'], ['🧩', '拼图'], ['📦', '交付'], ['🤝', '协作'],
-  ['❤️', '收藏'], ['🔥', '热门'], ['💬', '讨论'], ['🌱', '想法'],
-]
-
-const markerOptions = { color: markerColors, emoji: markerEmojis }
-
 export function markerDetails(marker) {
-  if (!Object.hasOwn(markerOptions, marker?.kind)) return undefined
-  return markerOptions[marker.kind].find(([value]) => value === marker.value)
+  if (marker?.kind !== 'color') return undefined
+  const preset = markerColors.find(([value]) => value === marker.value)
+  if (preset) return preset
+  if (/^#[0-9a-f]{6}$/i.test(marker.value ?? '')) return [marker.value, '自定义颜色 ' + marker.value, marker.value]
+}
+
+export function randomProjectMarker(projects = []) {
+  const used = new Set(projects.map(project => project.marker?.value))
+  const available = markerColors.filter(([value]) => !used.has(value))
+  const choices = available.length ? available : markerColors
+  return { kind: 'color', value: choices[Math.floor(Math.random() * choices.length)][0] }
+}
+
+// Legacy gateway records need a stable fallback across reloads and windows.
+export function projectMarker(color, id) {
+  const marker = { kind: 'color', value: color }
+  if (markerDetails(marker)) return marker
+  let hash = 0
+  for (const char of String(id)) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0
+  return { kind: 'color', value: markerColors[hash % markerColors.length][0] }
 }
 
 export const statusLabels = {

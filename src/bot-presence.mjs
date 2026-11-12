@@ -27,7 +27,7 @@ export function botPresence(chat) {
 export function roomMemberPresence(chat, id) {
   const room = chat.pending ? chat.agentRun?.room : chat.roomOutcome
   const status = room?.statuses?.[id]
-  if (chat.agentRun?.request?.params?.member_id === id) return 'waiting'
+  if (status === 'waiting' || chat.agentRun?.request?.params?.member_id === id) return 'waiting'
   if (room?.paused && ['queued', 'running', 'completed'].includes(status)) return 'waiting'
   if (status === 'queued') return 'thinking'
   if (status === 'running') return 'working'

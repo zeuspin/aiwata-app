@@ -1,36 +1,51 @@
+import { BrowserHome } from './browser-home.jsx'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { BrowserAnnotationForm, BrowserAnnotationList, browserAnnotations } from './browser-annotations.jsx'
+import { randomProjectMarker } from './conversation-meta.mjs'
 import { ProjectMarkerPicker } from './conversation-meta.jsx'
-import { tools } from './fixtures.mjs'
-import { Icon, IconButton, toolIcons } from './icons.jsx'
+import { Icon, IconButton } from './icons.jsx'
 import { isLocalAttachment } from './local-attachments.mjs'
-import { browserAddress, demoBrowser, emptyBrowserState, gitChanges, mediaProviders, moveBrowser, navigateBrowser, terminalOutput, toolEditDefaults } from './tool-surfaces.mjs'
+import { browserAddress, demoBrowser, emptyBrowserState, gitChanges, imageAspectRatios as aspectRatios, mediaProviders, moveBrowser, navigateBrowser, terminalOutput, toolEditDefaults } from './tool-surfaces.mjs'
 import './tool-surfaces.css'
 
 function folderName(path) {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 }
 
-export function ProjectDialog({ onClose, onCreate }) {
+export function ProjectDialog({ onClose, onCreate, pickFolders, loadFolders, createFolder }) {
   const dialog = useRef(null)
   const folderRequest = useRef(0)
+  const folderController = useRef(null)
   const [name, setName] = useState('')
-  const [marker, setMarker] = useState(null)
+  const [marker, setMarker] = useState(() => randomProjectMarker())
   const [folders, setFolders] = useState([])
   const [picking, setPicking] = useState(false)
   const [folderStatus, setFolderStatus] = useState('')
   const [demoFolder, setDemoFolder] = useState(null)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [availableFolders, setAvailableFolders] = useState(null)
+  const [folderNameDraft, setFolderNameDraft] = useState('')
   const desktop = window.hermesDesktop
   const hasDirectoryPicker = typeof window.showDirectoryPicker === 'function'
 
   useEffect(() => {
     dialog.current.showModal()
+    return () => {
+      folderRequest.current += 1
+      folderController.current?.abort()
+    }
   }, [])
 
   function addFolders(paths) {
-    const picked = paths.map(path => path.trim()).filter(Boolean)
+    const picked = paths.filter(Boolean)
     if (!picked.length) {
       setFolderStatus('未收到新的目录，已选目录会保留。')
+      return
+    }
+    if (new Set([...folders, ...picked]).size > 12) {
+      setFolderStatus('')
+      setError('一个项目最多可以关联 12 个文件夹。')
       return
     }
     setFolderStatus(picked.every(path => folders.includes(path)) ? '所选目录已在列表中。' : '')
@@ -40,12 +55,14 @@ export function ProjectDialog({ onClose, onCreate }) {
   }
 
   async function pickFolder() {
-    if (!desktop?.selectPaths && !hasDirectoryPicker) {
+    if (!desktop?.selectPaths && !hasDirectoryPicker && !pickFolders && !loadFolders) {
       setError('当前浏览器不支持直接选择目录。')
       setDemoFolder(previous => previous ?? '')
       return
     }
     const request = ++folderRequest.current
+    const controller = new AbortController()
+    folderController.current = controller
     setError('')
     setFolderStatus('正在等待系统目录选择…')
     setPicking(true)
@@ -53,6 +70,17 @@ export function ProjectDialog({ onClose, onCreate }) {
       if (desktop?.selectPaths) {
         const paths = await desktop.selectPaths({ directories: true, multiple: true, title: '选择项目目录' })
         if (request === folderRequest.current) addFolders(paths)
+      } else if (pickFolders) {
+        const result = await pickFolders(controller.signal)
+        if (request !== folderRequest.current) return
+        if (result.available) addFolders(result.paths)
+        else {
+          const choices = await loadFolders()
+          if (request === folderRequest.current) { setAvailableFolders(choices); setFolderStatus('') }
+        }
+      } else if (loadFolders) {
+        const choices = await loadFolders()
+        if (request === folderRequest.current) { setAvailableFolders(choices); setFolderStatus('') }
       } else {
         const directory = await window.showDirectoryPicker({ mode: 'read' })
         if (request === folderRequest.current) addFolders([directory.name])
@@ -61,7 +89,23 @@ export function ProjectDialog({ onClose, onCreate }) {
       if (request !== folderRequest.current) return
       setFolderStatus('')
       if (problem?.name === 'AbortError') setFolderStatus('系统没有返回目录，已选目录会保留。')
-      else setError('系统未能返回目录，请重新选择。')
+      else setError(problem.message || '系统未能返回目录，请重新选择。')
+    } finally {
+      if (folderController.current === controller) folderController.current = null
+      if (request === folderRequest.current) setPicking(false)
+    }
+  }
+
+  async function showWorkspaceFolders() {
+    const request = ++folderRequest.current
+    setPicking(true)
+    setError('')
+    setFolderStatus('')
+    try {
+      const choices = await loadFolders()
+      if (request === folderRequest.current) setAvailableFolders(choices)
+    } catch (problem) {
+      if (request === folderRequest.current) setError(problem.message)
     } finally {
       if (request === folderRequest.current) setPicking(false)
     }
@@ -76,11 +120,27 @@ export function ProjectDialog({ onClose, onCreate }) {
     setDemoFolder(null)
   }
 
+  async function addRealFolder() {
+    setPicking(true)
+    try {
+      const folder = await createFolder(folderNameDraft)
+      setAvailableFolders(previous => [...previous, folder])
+      setFolderNameDraft('')
+      addFolders([folder.path])
+    } catch (problem) { setError(problem.message) }
+    finally { setPicking(false) }
+  }
+
   return <dialog ref={dialog} className="project-dialog project-create-dialog" onCancel={onClose} aria-labelledby="project-heading">
     <header><h2 id="project-heading">创建项目</h2><IconButton icon="close" label="关闭" onClick={onClose} /></header>
-    <form onSubmit={event => {
+    <form onSubmit={async event => {
       event.preventDefault()
-      if (!picking && folders.length && !onCreate(name.trim(), folders, marker)) setError('项目未能创建，请重试。')
+      if (picking || saving || !folders.length) return
+      setSaving(true)
+      try {
+        if (!await onCreate(name.trim(), folders, marker)) setError('项目未能创建，请重试。')
+      } catch (problem) { setError(problem.message) }
+      finally { setSaving(false) }
     }}>
       <div className="project-name-field">
         <ProjectMarkerPicker title={name.trim() || '新项目'} label="选择项目标记" emptyIcon="tag" triggerText="标记"
@@ -98,6 +158,8 @@ export function ProjectDialog({ onClose, onCreate }) {
               <Icon name="folder" size={17} />
               <span className="project-folder-name" title={folder}>{folderName(folder)}</span>
               {index === 0 && folders.length > 1 && <small className="project-folder-primary">主目录</small>}
+              {index > 0 && <button className="project-folder-primary" type="button" aria-label={'将 ' + folderName(folder) + ' 设为主目录'}
+                onClick={() => setFolders(previous => [folder, ...previous.filter(path => path !== folder)])}>设为主目录</button>}
               <IconButton icon="close" label={'移除 ' + folder} onClick={() => setFolders(previous => previous.filter(path => path !== folder))} />
             </li>)}
           </ul>
@@ -111,7 +173,22 @@ export function ProjectDialog({ onClose, onCreate }) {
           </button>
         </div>}
         {folderStatus && <small role="status">{folderStatus}</small>}
-        {!desktop?.selectPaths && <div className="project-folder-help">
+        {loadFolders && !availableFolders && <div className="project-folder-help">
+          <button type="button" disabled={picking} onClick={showWorkspaceFolders}>从当前工作区选择</button>
+        </div>}
+        {availableFolders && <div className="project-folder-selected" role="group" aria-label="当前用户可用目录">
+          {availableFolders.map(folder => <button type="button" key={folder.path} className="project-folder-row"
+            disabled={folders.includes(folder.path)} onClick={() => addFolders([folder.path])}>
+            <Icon name="folder" size={16} />{folder.name}
+          </button>)}
+        </div>}
+        {availableFolders && createFolder && <div className="project-demo-folder">
+          <input aria-label="新文件夹名称" value={folderNameDraft} placeholder="新文件夹名称"
+            onChange={event => setFolderNameDraft(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (folderNameDraft.trim() && !picking) void addRealFolder() } }} />
+          <button type="button" className="secondary" disabled={picking || !folderNameDraft.trim()} onClick={addRealFolder}>新建文件夹</button>
+        </div>}
+        {!loadFolders && !desktop?.selectPaths && <div className="project-folder-help">
           <small>浏览器预览只记录目录名。</small>
           <button type="button" onClick={() => setDemoFolder(value => value === null ? '' : null)}
             aria-expanded={demoFolder !== null}>输入演示目录名</button>
@@ -125,7 +202,7 @@ export function ProjectDialog({ onClose, onCreate }) {
       {error && <p className="danger" role="alert">{error}</p>}
       <footer>
         <button className="secondary" type="button" onClick={onClose}>取消</button>
-        <button className="primary" disabled={picking || !name.trim() || !folders.length}>创建项目</button>
+        <button className="primary" disabled={saving || picking || !name.trim() || !folders.length}>{saving ? '正在创建…' : '创建项目'}</button>
       </footer>
     </form>
   </dialog>
@@ -133,21 +210,6 @@ export function ProjectDialog({ onClose, onCreate }) {
 
 export { emptyToolData } from './tool-surfaces.mjs'
 
-function BrowserHome({ openTool, navigate }) {
-  return <div className="tool-home">
-    <div className="tool-title browser-home-heading"><h3>工具</h3>
-      <button type="button" className="tool-text-button" onClick={() => navigate(demoBrowser)}>演示站点</button></div>
-    <div className="tool-launchers">{tools.filter(item => item !== '浏览器').map(item => <button type="button" key={item} onClick={() => openTool(item)}>
-      <Icon name={toolIcons[item]} size={17} />{item}
-    </button>)}</div>
-    <h3 className="tool-section-title">推荐</h3>
-    <div className="recommended">
-      <button onClick={() => openTool('无限画布')}><span><Icon name="canvas" size={24} /></span>无限画布</button>
-      <button onClick={() => openTool('生图工具')}><span><Icon name="photo" size={24} /></span>生图工具</button>
-      <button onClick={() => openTool('修图工具')}><span><Icon name="retouch" size={24} /></span>修图工具</button>
-    </div>
-  </div>
-}
 
 const browserPages = {
   '/': ['工作台预览', '在同一个空间里，从对话走到交付。', '围绕项目组织会话、打开工具、把工作成果带回 Agent。'],
@@ -156,8 +218,6 @@ const browserPages = {
   '/release': ['发布清单', '发布前的最后检查。', '核对产品截图、宣传素材和发布文案的交付状态。'],
 }
 const pageLinks = [['/workbench', '工作台'], ['/docs', '使用指南'], ['/release', '发布清单']]
-const emptyAnnotationDraft = { open: false, target: '', text: '' }
-
 function BrowserPage({ url, navigate, annotating, selectTarget, selection }) {
   const pageUrl = new URL(url)
   const internal = pageUrl.hostname === new URL(demoBrowser).hostname
@@ -171,7 +231,7 @@ function BrowserPage({ url, navigate, annotating, selectTarget, selection }) {
   }
 
   return <article className={'browser-demo-page' + (annotating ? ' annotating' : '')} aria-label="网页预览">
-    <header><img src="/aiwata.svg" alt="" /><strong>{title}</strong><span className="tool-badge">本地样例</span></header>
+    <header><img src="./aiwata.svg" alt="" /><strong>{title}</strong><span className="tool-badge">本地样例</span></header>
     <div className="browser-demo-hero">
       <span className="browser-demo-kicker">AIWATA WORKSPACE</span>
       {annotating
@@ -193,25 +253,15 @@ function BrowserTool({ openTool, chat, api, refresh, report, preview }) {
   const [addressDraft, setAddressDraft] = useState(null)
   const [reload, setReload] = useState(0)
   const data = chat.browser ?? emptyBrowserState
-  const { agentActions, playbackOpen, replayIndex } = data
-  const url = agentActions[replayIndex]?.url ?? data.visited
+  const { agentActions } = data
+  const replayIndex = null
+  const url = data.visited
   const address = addressDraft?.page === url ? addressDraft.text : url
-  const pins = data.annotations.filter(item => item.url === url)
-  const { open, target: selection, text: comment } = data.annotationDrafts?.[url] ?? emptyAnnotationDraft
-  const annotating = open && replayIndex === null && !preview
+  const annotations = browserAnnotations({ chat, url, api, refresh, report })
+  const annotating = annotations.draft.open && replayIndex === null && !preview
 
   function updateBrowser(update) {
-    if (api.updateBrowser(chat.id, update)) refresh()
-  }
-
-  function editAnnotation(patch) {
-    updateBrowser(previous => {
-      const annotationDrafts = { ...previous.annotationDrafts }
-      const draft = { ...emptyAnnotationDraft, ...annotationDrafts[url], ...patch }
-      if (draft.open || draft.target || draft.text) annotationDrafts[url] = draft
-      else delete annotationDrafts[url]
-      return { ...previous, annotationDrafts }
-    })
+    if (api.updateBrowser(chat.id, update, chat.toolInstanceId)) refresh()
   }
 
   function navigate(value) {
@@ -223,32 +273,6 @@ function BrowserTool({ openTool, chat, api, refresh, report, preview }) {
   function history(by) {
     setAddressDraft(null)
     updateBrowser(previous => moveBrowser(previous, by))
-  }
-
-  function showPlayback(open, index = null) {
-    setAddressDraft(null)
-    updateBrowser(previous => ({ ...previous, playbackOpen: open, replayIndex: index }))
-  }
-
-  function addAnnotation(event) {
-    event.preventDefault()
-    if (!comment.trim()) return
-    const pin = { url, target: selection || '整个页面', text: comment.trim() }
-    updateBrowser(previous => {
-      const annotationDrafts = { ...previous.annotationDrafts }
-      delete annotationDrafts[url]
-      return { ...previous, annotations: [...previous.annotations, pin], annotationDrafts }
-    })
-  }
-
-  function sendAnnotations() {
-    const current = api.current()?.chats[chat.id]
-    if (!current) return
-    const annotation = ['请查看以下网页批注', url, ...pins.map((pin, index) => (index + 1) + '. ' + pin.target + ' · ' + pin.text)].join('\n')
-    if (current.draft.includes(annotation)) return report('这些网页批注已在会话草稿中')
-    api.setDraft(chat.id, [current.draft, annotation].filter(Boolean).join('\n\n'))
-    refresh()
-    report('已将网页批注放入会话草稿')
   }
 
   return <>
@@ -265,31 +289,12 @@ function BrowserTool({ openTool, chat, api, refresh, report, preview }) {
     {(url || agentActions.length > 0) && <div className="tool-home browser-document">
       <div className="browser-document-actions">
         {url && <button type="button" className="secondary" aria-pressed={annotating} disabled={replayIndex !== null}
-          onClick={() => editAnnotation({ open: !annotating })}><Icon name="edit" size={15} />批注{pins.length ? ' · ' + pins.length : ''}</button>}
-        <button type="button" className="secondary" aria-expanded={playbackOpen} disabled={!agentActions.length}
-          onClick={() => showPlayback(!playbackOpen)}><Icon name="bot" size={15} />Agent 回放{agentActions.length ? ' · ' + agentActions.length : ''}</button>
+          onClick={() => annotations.edit({ open: !annotating })}><Icon name="edit" size={15} />批注{annotations.pins.length ? ' · ' + annotations.pins.length : ''}</button>}
       </div>
-      {playbackOpen && agentActions.length > 0 && <section className="browser-playback" aria-label="Agent 操作回放">
-        <div className="tool-title"><strong>{replayIndex === null ? '最近一次操作' : '回放 · ' + (replayIndex + 1) + ' / ' + agentActions.length}</strong>
-          <button type="button" className="tool-text-button" onClick={() => showPlayback(false)}>返回当前页面</button></div>
-        <ol>{agentActions.map((action, index) => <li key={index}>
-          <button type="button" aria-pressed={replayIndex === index} onClick={() => showPlayback(true, index)}>
-            <span>{index + 1}. {action.label || action.action || '打开网页'}</span>
-            {action.url && <small>{action.url}</small>}
-          </button>
-        </li>)}</ol>
-      </section>}
       {url && <BrowserPage key={url + reload} url={url} navigate={navigate} annotating={annotating}
-        selectTarget={target => editAnnotation({ target })} selection={selection} />}
-      {annotating && <form className="browser-note" onSubmit={addAnnotation}>
-        <label>批注位置 · {selection || '整个页面'}<textarea value={comment} onChange={event => editAnnotation({ text: event.target.value })}
-          placeholder="选择页面元素，或为整个页面写批注" /></label>
-        <button className="secondary" disabled={!comment.trim()}>保存批注</button>
-      </form>}
-      {!!pins.length && replayIndex === null && <section className="browser-pins" aria-label="网页批注">
-        <ul>{pins.map((pin, index) => <li key={index}><strong>{pin.target}</strong><p>{pin.text}</p></li>)}</ul>
-        <button className="primary" onClick={sendAnnotations}>添加批注到会话</button>
-      </section>}
+        selectTarget={target => annotations.edit({ target })} selection={annotations.draft.target} />}
+      {annotating && <BrowserAnnotationForm {...annotations} />}
+      {replayIndex === null && <BrowserAnnotationList {...annotations} />}
     </div>}
     {!url && <BrowserHome openTool={openTool} navigate={navigate} />}
   </>
@@ -318,7 +323,7 @@ function toolFiles(project, data, chat) {
 
 const toolFileKey = file => file.attachment ? JSON.stringify(['local', file.name]) : file.name
 
-function useReadingPosition({ chat, api, contentRef, scope, visible, output }) {
+export function useReadingPosition({ chat, api, contentRef, scope, visible, output }) {
   const position = useRef(null)
   const appliedTop = useRef(null)
   const followsOutput = output !== undefined
@@ -336,11 +341,11 @@ function useReadingPosition({ chat, api, contentRef, scope, visible, output }) {
     function save() {
       const top = el.scrollTop
       const max = el.scrollHeight - el.clientHeight
-      if (top === appliedTop.current || max <= 0 || !el.clientHeight || api.current()?.chats[chat.id] !== chat) return
+      if (top === appliedTop.current || max <= 0 || !el.clientHeight || api.current()?.chats[chat.id] !== (chat.sourceChat ?? chat)) return
       appliedTop.current = null
       const next = { top, follow: followsOutput && max - top <= 2 }
       position.current = next
-      api.updateToolEdits(chat.id, ({ readingPositions }) => ({ readingPositions: { ...readingPositions, [scope]: next } }))
+      api.updateToolEdits(chat.id, ({ readingPositions }) => ({ readingPositions: { ...readingPositions, [scope]: next } }), chat.toolInstanceId)
     }
     restore()
     el.addEventListener('scroll', save)
@@ -515,7 +520,6 @@ function GitTool({ data, set, updateEdits, project, report, chat, api, visible: 
 }
 
 const generationCost = 40
-const aspectRatios = { square: '1:1 方形', landscape: '16:9 横向', portrait: '9:16 纵向' }
 
 function imageSample(aspect = 'square', saturation = 100) {
   const [width, height] = { square: [480, 480], landscape: [640, 360], portrait: [360, 640] }[aspect]
@@ -638,7 +642,7 @@ function VideoEditTool({ data, set, chat, api, refresh, saveArtifact, report, pr
   useEffect(() => {
     if (preview || !data.playing) return
     const interval = setInterval(() => {
-      if (api.current()?.chats[chat.id] !== chat) return
+      if (api.current()?.chats[chat.id] !== (chat.sourceChat ?? chat)) return
       if (api.updateToolEdits(chat.id, ({ elapsed }) => ({
         elapsed: elapsed >= end || elapsed < start ? start : elapsed + 1,
       }))) refresh()
@@ -705,7 +709,7 @@ export function ToolPanel({ active, openTool, chat, api, refresh, report, data, 
   const Tool = toolViews[active]
 
   function updateEdits(edit) {
-    if (api.updateToolEdits(chat.id, edit)) refresh()
+    if (api.updateToolEdits(chat.id, edit, chat.toolInstanceId)) refresh()
   }
 
   function set(field, value) {
@@ -742,9 +746,22 @@ export function ToolPanel({ active, openTool, chat, api, refresh, report, data, 
     onAttachmentPreview={onAttachmentPreview} /> : null
 }
 
-export function Directory({ section, selected, record, report, account, search = '', onSearchChange }) {
+export function Directory({ section, selected, record, report, account, search = '', onSearchChange, live = false, onOpenNativeSurface }) {
   const labels = { library: '素材库', profile: '个人资料', usage: '积分和用量' }
   const title = labels[section]
+  if (live) {
+    const descriptions = {
+      library: '素材库未接入真实素材索引，暂时无法浏览和管理素材。当前会话的真实文件请在工具面板的「文件与产物」中查看。',
+      profile: '个人资料未接入正式账号服务，暂时无法查询或编辑真实个人资料。当前登录使用本机联调身份。',
+      usage: '积分和用量未接入产品计费服务，暂时无法查询真实积分余额、消费明细与模型用量。供应商实际计费请以其账单为准。',
+    }
+    return <>
+      <div className="directory-heading"><h2>{title}</h2></div>
+      <section className="profile-card" role="status" aria-label={title + '接入状态'}>
+        {section==='library'&&onOpenNativeSurface ? <><h3>会话文件与生成产物</h3><p>从原生索引浏览当前连接和 Profile 的会话产物、图像与链接。</p><button className="primary" onClick={()=>onOpenNativeSurface('artifacts')}>打开原生产物索引</button></> : <><h3>未接入</h3><p>{descriptions[section]}</p><p>此页面不展示演示数据。</p></>}
+      </section>
+    </>
+  }
   const match = name => name.toLowerCase().includes(search.toLowerCase())
   const assets = selected === 'docs' ? record.assets.filter(name => /\.(md|pdf)$/.test(name)) : selected === 'recent' ? record.assets.slice(0, 2) : record.assets
 
@@ -752,6 +769,7 @@ export function Directory({ section, selected, record, report, account, search =
     <div className="directory-heading"><h2>{title}</h2>
       {section === 'library' && <label className="search-box"><Icon name="search" /><input aria-label={'搜索' + title} placeholder="搜索" value={search} onChange={e => onSearchChange(e.target.value)} /></label>}
     </div>
+    <p className="muted" role="status">演示数据，仅用于原型交互，不代表真实素材、个人资料或账单。</p>
     {section === 'library' && <div className="asset-table">
       <div className="asset-head">名称<span>位置</span></div>
       {assets.filter(match).map(name => <button key={name} className="asset-row" onClick={() => report('已选择 · ' + name)}><span><Icon name="file" />{name}</span><span>本机工作区</span></button>)}

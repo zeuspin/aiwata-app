@@ -1,0 +1,4 @@
+interface:
+  display_name: "AIWATA macOS 打包与安装验收"
+  short_description: "复用原生宿主打包 DMG，核对覆盖安装、数据保留、Dock 与窗口布局"
+  default_prompt: "使用 $aiwata-macos-packaging 为当前 AIWATA 构建私有 DMG，按授权范围验收并保留现有数据。"

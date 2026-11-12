@@ -57,11 +57,11 @@ export function getApprovalMode(profileMode, legacyMode) {
 
 export function getTrigger(value, caret) {
   const head = value.slice(0, caret)
-  const slash = /^\s*(\/([a-z0-9-]*))$/i.exec(head)
+  const slash = /^\s*(\/([\p{L}\p{N}_:\/-]*))$/u.exec(head)
   const mention = /(?:^|\s)(@([^\s@]*))$/.exec(head)
   const match = slash ?? mention
   if (!match) return null
-  const tail = value.slice(caret).match(slash ? /^[a-z0-9-]*/i : /^[^\s@]*/)[0]
+  const tail = value.slice(caret).match(slash ? /^[\p{L}\p{N}_:\/-]*/u : /^[^\s@]*/)[0]
   return { kind: slash ? '/' : '@', query: match[2], start: caret - match[1].length, end: caret + tail.length }
 }
 
@@ -78,7 +78,12 @@ export function referenceText(kind, value) {
   return '@' + kind + ':' + (quote ? quote + value + quote : value)
 }
 
+export function isSlashCommandName(value) {
+  return typeof value === 'string' && value.length <= 200 &&
+    /^(?:[\p{L}\p{N}_-]+:)?[\p{L}\p{N}_-]+(?:\/[\p{L}\p{N}_-]+)*$/u.test(value)
+}
+
 export function parseSlash(value) {
-  const match = /^\/([a-z][\w-]*)(?:\s+([\s\S]*))?$/i.exec(value.trim())
-  return match ? [match[1].toLowerCase(), match[2] ?? ''] : null
+  const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(value.trim())
+  return match && isSlashCommandName(match[1]) ? [match[1].toLowerCase(), match[2] ?? ''] : null
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { ConversationMarker } from './conversation-meta.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
@@ -7,11 +7,15 @@ import {
   approvalModes, attachmentSizeLimit, commands, getApprovalMode, getModel, getTrigger,
   models, parseSlash, referenceKinds, referenceText, replaceTrigger, sources,
 } from './composer.mjs'
+import { useLiveCompletions } from './use-live-completions.jsx'
+import { liveCompletionTrigger, liveNavigationCommands } from './live-completions.mjs'
 import './composer.css'
 
 export { sources } from './composer.mjs'
+const LiveModelPicker = lazy(() => import('./live-model-picker.jsx'))
+const LiveApprovalControl = lazy(() => import('./live-approval-control.jsx'))
 
-export function Composer({ chat, project, projectPicker, bot, group, members, onClearReply, autoFocus, compact, api, refresh, send, stop, report, assets, onCommand, onAttachmentPreview }) {
+export function Composer({ chat, project, projectPicker, bot, group, members, onClearReply, autoFocus, compact, api, refresh, send, stop, report, assets, onCommand, onAttachmentPreview, live, liveModel, modelService, onSelectModel, modelDisabled, approvalService, approvalConnected, voiceService, completionService, completionCwd, sendDisabled, stopDisabled }) {
   const [menu, setMenu] = useState('')
   const [projectSearch, setProjectSearch] = useState('')
   const [voice, setVoice] = useState(null)
@@ -20,6 +24,7 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
   const [active, setActive] = useState(0)
   const [dismissed, setDismissed] = useState('')
   const [focused, setFocused] = useState(false)
+  const [modelPicker, setModelPicker] = useState(false)
   const root = useRef(null)
   const area = useRef(null)
   const picker = useRef(null)
@@ -31,10 +36,13 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
   const model = getModel(chat)
   const mode = getApprovalMode(api.current()?.approvalMode, chat.permission)
   const canStartCommand = !chat.draft.trim() || /^\s*\/[a-z-]*$/i.test(chat.draft)
-  const canSend = hasPromptContent({ text: chat.draft, attachments: chat.attachments })
-  const trigger = focused && !voice && !menu && getTrigger(chat.draft, caret)
+  const canSend = !sendDisabled && hasPromptContent({ text: chat.draft, attachments: chat.attachments })
+  const trigger = focused && !voice && !menu && (live ? liveCompletionTrigger : getTrigger)(chat.draft, caret)
   const triggerKey = trigger ? JSON.stringify([chat.draft, caret]) : ''
-  const suggestions = trigger && dismissed !== triggerKey
+  const nativeCompletions = useLiveCompletions({ live: completionService, chat, trigger, text: chat.draft, cwd: completionCwd, enabled: !!trigger && !group && dismissed !== triggerKey })
+  const suggestions = live ? group && trigger?.kind === '@' && dismissed !== triggerKey
+    ? completionItems(trigger, assets, project, onCommand, members) : nativeCompletions.items
+    : trigger && dismissed !== triggerKey
     ? completionItems(trigger, assets, project, onCommand, group ? members : null)
     : []
   const selected = Math.min(active, suggestions.length - 1)
@@ -112,8 +120,9 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
   function insertSuggestion(item) {
     if (!trigger) return
     const next = replaceTrigger(chat.draft, trigger, item.insert, item.complete)
-    setDraft(next.text, next.caret)
-    focusArea(next.caret)
+    const caret = next.caret - (item.caretBack ?? 0)
+    setDraft(next.text, caret)
+    focusArea(caret)
   }
 
   function insertStarter(token) {
@@ -136,10 +145,31 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
     focusArea(nextCaret)
   }
 
-  function submit() {
+  async function submit() {
     if (voice || !canSend) return
     const parsed = parseSlash(chat.draft)
-    if (!parsed) {
+    if (live && parsed && !group && liveNavigationCommands.has(parsed[0])) {
+      const [name, args] = parsed
+      if (name === 'help') { setDraft('/'); setDismissed(''); focusArea(1); return }
+      if (name === 'model') {
+        if (modelDisabled || args) return report('请通过模型选择器选择模型。', true)
+        setModelPicker(true); setDraft(''); return
+      }
+      if (name === 'approvals') {
+        if (args) {
+          if (!approvalModes.some(option => option.id === args)) return report('审批方式可选 manual、smart 或 off', true)
+          try {
+            await approvalService.rpc('config.set', { key: 'approvals.mode', value: args }, chat.gatewayProfile)
+            if (api.getChat(chat.id)?.draft.trim() === '/approvals ' + args) { setDraft(''); report('审批方式已保存') }
+          } catch (problem) { report(problem.message, true) }
+        } else { root.current.querySelector('[aria-label="Agent 批准方式"]')?.click(); setDraft('') }
+        return
+      }
+      if (args) return report('此命令请直接使用工作台对应入口。', true)
+      if (onCommand?.(name) !== false) setDraft('')
+      return
+    }
+    if (!parsed || live) {
       setMenu('')
       send()
       return
@@ -238,8 +268,19 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
       report('此浏览器环境无法录音', true)
       return
     }
-    const job = { chunks: [], size: 0 }
+    const job = { chunks: [], size: 0, controller: new AbortController(), profile: chat.gatewayProfile || 'default' }
     recording.current = job
+    if (voiceService) {
+      setVoice({ phase: 'checking' })
+      focusVoiceCancel()
+      try {
+        const status = await voiceService.voiceStatus(job.profile, job.controller.signal)
+        if (recording.current !== job) return
+        if (!status.available) return finishVoice(job, status.message)
+      } catch (error) {
+        return finishVoice(job, error.message)
+      }
+    }
     setVoice({ phase: 'requesting' })
     focusVoiceCancel()
     try {
@@ -275,7 +316,7 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
     clearInterval(job.clock)
     setVoice({ phase: 'transcribing' })
     focusVoiceCancel()
-    job.recorder.onstop = () => {
+    job.recorder.onstop = async () => {
       job.stream.getTracks().forEach(track => track.stop())
       if (recording.current !== job) return
       const audio = new Blob(job.chunks, { type: job.recorder.mimeType })
@@ -284,13 +325,25 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
         finishVoice(job, '未录到音频，请重试')
         return
       }
-      // The future Hermes /api/audio/transcribe adapter takes the audio and returns { transcript }.
-      job.timer = setTimeout(() => {
-        const transcript = '请把这一轮工作整理成清单。'
+      function insertTranscript(transcript, notice) {
+        if (recording.current !== job) return
+        if (!transcript) return finishVoice(job, '未检测到清晰语音，请重试')
         const prior = api.getChat(chat.id)?.draft
         if (prior !== undefined) setDraft([prior, transcript].filter(Boolean).join('\n'))
         finishVoice(job)
-        report('已插入模拟转写，请检查后发送')
+        report(notice)
+      }
+      if (voiceService) {
+        try {
+          const { transcript } = await voiceService.transcribeVoice(job.profile, audio, job.controller.signal)
+          insertTranscript(transcript, '已转写到草稿，请检查后发送')
+        } catch (error) {
+          finishVoice(job, error.message)
+        }
+        return
+      }
+      job.timer = setTimeout(() => {
+        insertTranscript('请把这一轮工作整理成清单。', '已插入模拟转写，请检查后发送')
       }, 600)
     }
     job.recorder.stop()
@@ -408,8 +461,8 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
             <IconButton icon="close" label="取消语音输入" onClick={() => finishVoice(recording.current)} />
             <span className="voice-status">
               {voice.phase === 'recording' && <span className="voice-indicator" />}
-              <span role="status">{voice.phase === 'requesting' ? '正在等待麦克风授权' : voice.phase === 'recording'
-                ? '正在录音' : '正在模拟转写'}</span>
+              <span role="status">{voice.phase === 'checking' ? '正在检查语音转写服务' : voice.phase === 'requesting'
+                ? '正在等待麦克风授权' : voice.phase === 'recording' ? '正在录音' : voiceService ? '正在转写' : '正在模拟转写'}</span>
               {voice.phase === 'recording' && <span aria-hidden="true">· {formatRecordingTime(voice.seconds)}</span>}
             </span>
             <IconButton icon="check" label="完成录音" disabled={voice.phase !== 'recording'} onClick={transcribe} />
@@ -451,23 +504,32 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
               <div className="composer-actions">
                 <IconButton icon="add" label="添加素材" aria-expanded={menu === 'attachments'} onClick={event => toggleMenu(event, 'attachments')} />
                 {group ? <button type="button" className="control-text" aria-label="提及群成员" onClick={() => insertStarter('@')}>@</button>
-                : <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
+                : live && approvalService ? <Suspense fallback={null}><LiveApprovalControl live={approvalService} profile={chat.gatewayProfile}
+                    connected={approvalConnected} name={bot?.name} report={report} /></Suspense>
+                : !live && <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
                   aria-label="Agent 批准方式" title={mode.label} aria-expanded={menu === 'permission'} onClick={event => toggleMenu(event, 'permission')}>
                   <Icon name="shield" size={15} /><span>{mode.label}</span>
                 </button>}
               </div>
               <div className="composer-actions">
-                {!group && !bot && <button type="button" className="control-text composer-model" aria-label="模型与用量来源" title={model.label + ' · ' + model.description}
+                {live && (group ? <span className="control-text muted">成员各自模型</span> :
+                  <button type="button" className="control-text composer-model" aria-label="选择会话模型" disabled={modelDisabled}
+                    onClick={() => setModelPicker(true)}>
+                    <span>{(chat.gatewayId ? chat.model : chat.gatewayModelPick?.model || liveModel) || '档案默认模型'}</span>
+                    <Icon name="chevron" size={14} />
+                  </button>)}
+                {!live && !group && !bot && <button type="button" className="control-text composer-model" aria-label="模型与用量来源" title={model.label + ' · ' + model.description}
                   aria-expanded={menu === 'source'} onClick={event => toggleMenu(event, 'source')}>
                   <span>{model.label}</span><Icon name="chevron" size={14} />
                 </button>}
-                <IconButton icon="mic" label="语音输入" onClick={beginVoice} />
-                {chat.pending && !chat.agentRun?.room?.paused && <IconButton icon="stop" label={group ? '停止讨论' : '停止生成'} onClick={stop} />}
+                {(!live || voiceService) && <IconButton icon="mic" label="语音输入" onClick={beginVoice} />}
+                {chat.pending && !chat.gatewayUnknown && !chat.agentRun?.room?.paused && <IconButton icon="stop" label={group ? '停止讨论' : '停止生成'} disabled={stopDisabled} onClick={stop} />}
                 <button type="submit" className="send-button" aria-label={chat.pending ? '排队发送消息' : '发送消息'}
                   disabled={!canSend}><Icon name="send" /></button>
               </div>
             </div>
           </>}
+      {live && focused && trigger && nativeCompletions.error && <p className="composer-completion-error" role="status">补全暂不可用，可继续输入。{nativeCompletions.error}</p>}
       {!!suggestions.length && <div className="popover composer-menu composer-suggestions" id={suggestionId} role="listbox"
         aria-label={group ? '群成员建议' : trigger.kind === '/' ? '斜杠指令' : '上下文引用'}>
         <div className="popover-caption" aria-hidden="true">{group ? '提及成员' : trigger.kind === '/' ? '斜杠指令' : '上下文引用'} <span>↑ ↓ 选择 · ↵ 插入</span></div>
@@ -510,6 +572,9 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
         </>}
       </div>}
     </form>
+    {modelPicker && modelService && <Suspense fallback={null}>
+      <LiveModelPicker chat={chat} live={modelService} onSelect={onSelectModel} onClose={() => setModelPicker(false)} />
+    </Suspense>}
   </div>
 }
 
@@ -544,6 +609,7 @@ function completionItems(trigger, assets, project, onCommand, members) {
 
 function releaseRecording(job) {
   if (!job) return
+  job.controller.abort()
   clearInterval(job.clock)
   clearTimeout(job.timer)
   if (job.recorder) {

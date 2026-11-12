@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { conversationStatus } from '../src/conversation-meta.mjs'
 import { closeTabs } from '../src/tabs.mjs'
-import { moveBrowser, navigateBrowser, terminalOutput } from '../src/tool-surfaces.mjs'
+import { browserAnnotationPrompt, editBrowserAnnotation, moveBrowser, navigateBrowser, saveBrowserAnnotation, terminalOutput } from '../src/tool-surfaces.mjs'
 import { createWorkspace, fitPanels, resizePanels, viewAtWidth } from '../src/workspace.mjs'
 
 test('dragging a separator leaves the other separator in place', () => {
@@ -83,6 +83,40 @@ test('local attachment bytes survive queue admission and are released when the l
   assert.equal(files.size, 0)
 })
 
+test('a saved live image stays in its own conversation and shares its bytes with the draft', async () => {
+  const files = new Map()
+  const key = (account, chat, id) => JSON.stringify([account, chat, id])
+  const attachments = {
+    async save(account, chat, items) {
+      for (const { id, file } of items) files.set(key(account, chat, id), file)
+    },
+    async read(account, chat, id) { return files.get(key(account, chat, id)) },
+    async remove(account, chat, ids) {
+      for (const id of ids) files.delete(key(account, chat, id))
+    },
+  }
+  const api = createWorkspace(null, attachments, { live: true })
+  api.login('lin')
+  const chat = api.openChatDraft()
+  api.hydrateGatewayChat(chat.id, { session_id: 'image-session', messages: [] })
+  api.acceptGatewayPrompt(chat.id, { runId: 'turn', text: '开始' }, { admission_id: 'admitted' })
+  const save = name => api.saveLocalToolMedia(chat.id, new File(['raster'], name, { type: 'image/png' }), 'liveImage')
+  assert.equal(await save('初稿.png'), true)
+  assert.equal(api.attachLocalToolMedia(chat.id, 'liveImage'), true)
+  assert.equal(api.attachLocalToolMedia(chat.id, 'liveImage'), false)
+  assert.equal(chat.attachmentDetails['初稿.png'].blobId, chat.toolEdits.liveImage.blobId)
+  assert.equal(await save('替换稿.png'), true)
+  assert.equal(await save('最新稿.png'), true)
+  assert.equal(files.size, 2)
+  const image = chat.toolEdits.liveImage
+  api.login('qiao')
+  assert.equal(await api.readLocalAttachment(chat.id, image.blobId), null)
+  api.login('lin')
+  assert.equal(await (await api.readLocalAttachment(chat.id, image.blobId)).text(), 'raster')
+  assert.equal(api.deleteChat(chat.id), true)
+  assert.equal(files.size, 0)
+})
+
 test('browser history, annotations, and replay survive reload without crossing accounts or chats', () => {
   const entries = new Map()
   const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) }
@@ -96,7 +130,9 @@ test('browser history, annotations, and replay survive reload without crossing a
   api.applyAgentEvent('plan', 'browser-run', { type: 'preview.open', data: { url: release, label: '发布清单' } }, false)
   api.updateBrowser('plan', state => moveBrowser(state, -1))
   const annotations = [{ url: docs, target: '标题', text: '林晓的会话批注' }]
-  api.updateBrowser('plan', state => ({ ...state, annotations, playbackOpen: true, replayIndex: 1 }))
+  api.updateBrowser('plan', state => editBrowserAnnotation(state, release, { open: true, text: '另一页草稿' }))
+  api.updateBrowser('plan', state => editBrowserAnnotation(state, docs, { open: true, target: '标题', text: ' 林晓的会话批注 ' }))
+  api.updateBrowser('plan', state => ({ ...saveBrowserAnnotation(state, docs), playbackOpen: true, replayIndex: 1 }))
   assert.equal(api.current().chats.review.browser, undefined)
 
   api.login('qiao')
@@ -111,6 +147,9 @@ test('browser history, annotations, and replay survive reload without crossing a
   assert.equal(browser.visited, docs)
   assert.equal(browser.historyIndex, 1)
   assert.deepEqual(browser.annotations, annotations)
+  assert.equal(browser.annotationDrafts[docs], undefined)
+  assert.equal(browser.annotationDrafts[release].text, '另一页草稿')
+  assert.equal(browserAnnotationPrompt(docs, browser.annotations), '请查看以下网页批注\n' + docs + '\n1. 标题 · 林晓的会话批注')
   assert.deepEqual(browser.agentActions.map(action => action.url), [docs, release])
   assert.equal(browser.playbackOpen, true)
   assert.equal(browser.replayIndex, 1)
@@ -122,6 +161,7 @@ test('browser history, annotations, and replay survive reload without crossing a
   const other = reopened.current().chats['atlas-chat'].browser
   assert.equal(other.visited, 'https://example.com/atlas')
   assert.deepEqual(other.annotations, [])
+  assert.deepEqual(other.annotationDrafts, {})
   assert.deepEqual(other.agentActions, [])
 })
 
@@ -332,19 +372,19 @@ test('saved projects get distinct default markers and keep edits after signing i
   const projects = reopened.current().projects
   assert.ok(projects.every(project => project.marker?.kind === 'color'))
   assert.equal(new Set(projects.map(project => project.marker.value)).size, projects.length)
-  const emoji = { kind: 'emoji', value: '🎨' }
-  assert.equal(reopened.setProjectMarker('studio', emoji), true)
+  const customColor = { kind: 'color', value: '#123abc' }
+  assert.equal(reopened.setProjectMarker('studio', customColor), true)
   assert.equal(reopened.setProjectMarker('studio', { kind: 'color', value: 'invalid' }), false)
-  assert.equal(reopened.setProjectMarker('missing', emoji), false)
+  assert.equal(reopened.setProjectMarker('missing', customColor), false)
   const created = reopened.addProject('新项目', '~/Projects/new')
   assert.equal(created.marker.kind, 'color')
-  const custom = reopened.addProject('自定义标记项目', '~/Projects/custom', { marker: emoji })
-  assert.deepEqual(custom.marker, emoji)
+  const custom = reopened.addProject('自定义标记项目', '~/Projects/custom', { marker: customColor })
+  assert.deepEqual(custom.marker, customColor)
   const reloaded = createWorkspace(storage)
   reloaded.login('lin')
-  assert.deepEqual(reloaded.current().projects.find(project => project.id === 'studio').marker, emoji)
+  assert.deepEqual(reloaded.current().projects.find(project => project.id === 'studio').marker, customColor)
   assert.deepEqual(reloaded.current().projects.find(project => project.id === created.id).marker, created.marker)
-  assert.deepEqual(reloaded.current().projects.find(project => project.id === custom.id).marker, emoji)
+  assert.deepEqual(reloaded.current().projects.find(project => project.id === custom.id).marker, customColor)
 })
 
 test('creating a project saves its primary and additional folders together', () => {
@@ -600,4 +640,108 @@ test('random portrait batches offer ten different silhouettes with clear hair co
       assert.ok((Math.max(fg, bg) + .05) / (Math.min(fg, bg) + .05) >= 3, `${tone} on ${background}`)
     }
   }
+})
+
+test('explicit new browser tabs preserve independent pages and annotations through reload and close', () => {
+  const saved = new Map()
+  const storage = { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) }
+  const api = createWorkspace(storage)
+  api.login('lin')
+  api.openTool('plan', '浏览器')
+  const first = api.getChat('plan').tool
+  api.updateBrowser('plan', state => navigateBrowser(state, 'https://example.com/first'), first)
+  api.openTool('plan', '浏览器', undefined, { newInstance: true })
+  const second = api.getChat('plan').tool
+  assert.notEqual(first, second)
+  assert.equal(api.getChat('plan').tabs.length, 2)
+  api.updateBrowser('plan', state => editBrowserAnnotation(navigateBrowser(state, 'https://example.com/second'),
+    'https://example.com/second', { text: '第二个标签的草稿' }), second)
+  api.renameTool('plan', second, '参考页')
+  api.selectTool('plan', first)
+  assert.equal(api.getChat('plan').tool, first)
+  const restored = createWorkspace(storage)
+  restored.login('lin')
+  assert.equal(restored.getChat('plan').browser.visited, 'https://example.com/first')
+  assert.equal(restored.getChat('plan').toolInstances[second].browser.visited, 'https://example.com/second')
+  assert.equal(restored.getChat('plan').toolInstances[second].browser.annotationDrafts['https://example.com/second'].text, '第二个标签的草稿')
+  assert.equal(restored.getChat('plan').toolTitles[second], '参考页')
+  restored.closeTools('plan', second)
+  assert.deepEqual(restored.getChat('plan').tabs, [first])
+  assert.equal(restored.getChat('plan').browser.visited, 'https://example.com/first')
+  assert.equal(restored.getChat('plan').toolInstances[second], undefined)
+  assert.equal(restored.updateBrowser('plan', state => navigateBrowser(state, 'https://example.com/stale'), second), false)
+  restored.login('qiao')
+  assert.equal(restored.getChat('atlas-chat').toolInstances, undefined)
+})
+
+test('ordinary browser opens reuse the active or latest browser without resetting pages', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  api.openTool('plan', '浏览器', undefined, { newInstance: true })
+  const first = api.getChat('plan').tool
+  api.updateBrowser('plan', state => navigateBrowser(state, 'https://example.com/first'), first)
+  api.openTool('plan', '浏览器', undefined, { newInstance: true })
+  const second = api.getChat('plan').tool
+  api.selectTool('plan', first)
+  api.openTool('plan', '浏览器')
+  assert.equal(api.getChat('plan').tool, first)
+  api.openTool('plan', '无限画布')
+  api.updateBrowser('plan', state => navigateBrowser(state, 'https://example.com/link'))
+  api.openTool('plan', '浏览器')
+  assert.equal(api.getChat('plan').tool, second)
+  assert.equal(api.getChat('plan').tabs.length, 3)
+  assert.equal(api.getChat('plan').toolInstances[first].browser.visited, 'https://example.com/first')
+  assert.equal(api.getChat('plan').toolInstances[second].browser.visited, 'https://example.com/link')
+  api.openTool('review', '浏览器', undefined, { newInstance: true })
+  assert.notEqual(api.getChat('review').tool, second)
+})
+
+test('new terminals have independent command histories and can be inserted and closed separately', () => {
+  const api = createWorkspace()
+  api.login('lin')
+  api.openTool('plan', '终端', undefined, { newInstance: true })
+  const first = api.getChat('plan').tool
+  api.updateToolEdits('plan', () => ({ terminalLog: [{ command: 'pwd', output: '/first' }] }), first)
+  api.openTool('plan', '无限画布')
+  api.openTool('plan', '终端', first, { newInstance: true })
+  const second = api.getChat('plan').tool
+  assert.notEqual(first, second)
+  assert.deepEqual(api.getChat('plan').tabs, [first, second, '无限画布'])
+  api.updateToolEdits('plan', () => ({ terminalLog: [{ command: 'ls', output: 'second' }] }), second)
+  assert.equal(api.getChat('plan').toolInstances[first].toolEdits.terminalLog[0].output, '/first')
+  assert.equal(api.getChat('plan').toolInstances[second].toolEdits.terminalLog[0].output, 'second')
+  api.closeTools('plan', first)
+  assert.equal(api.getChat('plan').toolInstances[second].toolEdits.terminalLog[0].output, 'second')
+  assert.equal(api.updateToolEdits('plan', () => ({ terminalLog: [] }), first), false)
+})
+
+test('a failed native terminal close keeps its tab and data available for retry', async () => {
+  const { closeToolInstances } = await import('../src/tool-tabs.mjs')
+  const api = createWorkspace()
+  api.login('lin')
+  api.openTool('plan', '终端', undefined, { newInstance: true })
+  const first = api.getChat('plan').tool
+  api.updateToolEdits('plan', () => ({ terminalLog: [{ command: 'pwd', output: '/first' }] }), first)
+  const failed = await closeToolInstances(api, 'plan', first, 'one', async () => { throw new Error('offline') })
+  assert.equal(failed.failed[0].error.message, 'offline')
+  assert.deepEqual(api.getChat('plan').tabs, [first])
+  assert.equal(api.getChat('plan').toolInstances[first].toolEdits.terminalLog[0].output, '/first')
+  await closeToolInstances(api, 'plan', first, 'one', async () => ({ ok: true }))
+  assert.deepEqual(api.getChat('plan').tabs, [])
+})
+
+test('bulk closing waits for native acknowledgement and leaves newly opened tabs intact', async () => {
+  const { closeToolInstances } = await import('../src/tool-tabs.mjs')
+  const api = createWorkspace()
+  api.login('lin')
+  api.openTool('plan', '终端', undefined, { newInstance: true })
+  const first = api.getChat('plan').tool
+  let confirm
+  const pending = closeToolInstances(api, 'plan', first, 'all', () => new Promise(resolve => { confirm = resolve }))
+  assert.deepEqual(api.getChat('plan').tabs, [first])
+  api.openTool('plan', '浏览器', undefined, { newInstance: true })
+  const second = api.getChat('plan').tool
+  confirm({ ok: true })
+  await pending
+  assert.deepEqual(api.getChat('plan').tabs, [second])
 })

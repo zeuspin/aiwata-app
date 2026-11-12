@@ -1,0 +1,4 @@
+interface:
+  display_name: "AIWATA 核心升级交接"
+  short_description: "升级 Hermes 核心时保留新前端、原生宿主、分发定制与用户数据"
+  default_prompt: "使用 $aiwata-core-upgrade 读取工程职责和交接记录，核实目标 Hermes 版本后迁移并验收现有 AIWATA 定制。"

@@ -1,6 +1,8 @@
 import React, { useId } from 'react'
 import { automaticEyeColor, botAppearanceSeed, botShapes, getBotAppearance } from './bot-appearance.mjs'
 import { BotPortrait } from './bot-portrait.jsx'
+import { PeekingPortrait } from './bot-peeking.jsx'
+import { peekingPalettes } from './bot-peeking.mjs'
 import { resolveBotPortrait } from './bot-portraits.mjs'
 import { Icon } from './icons.jsx'
 import './bot-avatar.css'
@@ -35,7 +37,7 @@ const badgePaths = {
 
 export function BotFace({ bot, size = 'normal', state = 'idle', still = false }) {
   const gradient = useId()
-  const { mode, portrait, portraitDesign, shape, bodyColor, eyeColor, eyeStyle } = getBotAppearance(bot)
+  const { mode, portrait, portraitDesign, peekingDesign, shape, bodyColor, eyeColor, eyeStyle } = getBotAppearance(bot)
   const person = mode === 'portrait' ? resolveBotPortrait(portrait, portraitDesign) : undefined
   const { path, eyeY } = botShapes[shape]
   const effectY = person ? 2 : eyeY ?? 0
@@ -47,7 +49,7 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
   return <span className={'bot-avatar bot-avatar-' + size} data-bot-state={state} data-bot-still={still || undefined}
     data-bot-shape={mode === 'character' ? shape : undefined} data-bot-avatar-mode={mode}
     data-bot-portrait={person ? portrait : undefined}
-    style={{ '--bot-base': person ? person.shirt[0] : bodyColor, '--bot-ink': eyeColor ?? autoInk, '--bot-outline': eyeColor ? autoInk : 'transparent',
+    style={{ '--bot-base': mode === 'peeking' ? peekingPalettes.clothing[peekingDesign.clothing].colors[0] : person ? person.shirt[0] : bodyColor, '--bot-ink': eyeColor ?? autoInk, '--bot-outline': eyeColor ? autoInk : 'transparent',
       '--bot-delay': '-' + delay + 's' }} aria-hidden="true">
     {mode === 'photo' && <span className="bot-avatar-photo"><img src={bot.avatar} alt="" /></span>}
     <svg viewBox="0 0 64 64" focusable="false">
@@ -58,6 +60,7 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
         {mode === 'character' && <clipPath id={gradient + '-shape'}><path d={path} /></clipPath>}
       </defs>
       {person && <BotPortrait portrait={person} state={state} still={still} />}
+      {mode === 'peeking' && <PeekingPortrait design={peekingDesign} state={state} still={still} />}
       <g className="bot-avatar-orbit" fill="none" strokeLinecap="round">
         <path d="M11 16a26 26 0 0 1 18-10m21 45a26 26 0 0 1-14 7" />
         <circle cx="54" cy="17" r="1.6" fill="currentColor" stroke="none" />
@@ -72,7 +75,7 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
           </g>
         </g>
       </g>}
-      {state === 'idle' && !still && <g className="bot-avatar-idle-effects">
+      {state === 'idle' && !still && mode !== 'peeking' && <g className="bot-avatar-idle-effects">
         <path className="bot-avatar-idle-note" d="M49 8v11a3 3 0 1 1-2-2.8V7l10-3v4Z" />
         <g className="bot-avatar-gum">
           <circle cx="35" cy={42 + effectY} r="10" />

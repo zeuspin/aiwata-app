@@ -1,5 +1,5 @@
 import React, { useId, useRef, useState } from 'react'
-import { conversationStatus, markerColors, markerDetails, markerEmojis, showsRunningArc, statusLabels } from './conversation-meta.mjs'
+import { conversationStatus, markerColors, markerDetails, showsRunningArc, statusLabels } from './conversation-meta.mjs'
 import { Icon } from './icons.jsx'
 
 export function describeChat(chat, projectMarker) {
@@ -19,9 +19,7 @@ export function ConversationStatus({ chat }) {
 export function ConversationMarker({ marker }) {
   const [value, label, color] = markerDetails(marker) ?? []
   if (!value) return null
-  return color
-    ? <span className="conversation-marker color-marker" style={{ '--marker-color': color }} title={label} aria-hidden="true" />
-    : <span className="conversation-marker emoji-marker" title={label} aria-hidden="true">{value}</span>
+  return <span className="conversation-marker color-marker" style={{ '--marker-color': color }} title={label} aria-hidden="true" />
 }
 
 export function ProjectMarkerPicker({ title, marker, onSave, label = '更换标记 · ' + title, emptyIcon, triggerText }) {
@@ -59,10 +57,11 @@ export function ProjectMarkerPicker({ title, marker, onSave, label = '更换标�
         <h3>纯色标</h3>
         <div className="marker-choices">{markerColors.map(([value, label]) => choice('color', value, label))}</div>
       </div>
-      <div className="marker-group" role="group" aria-label="Emoji 表情">
-        <h3>Emoji 表情</h3>
-        <div className="marker-choices">{markerEmojis.map(([value, label]) => choice('emoji', value, label))}</div>
-      </div>
+      <label className="marker-custom-color">
+        自定义颜色
+        <input type="color" aria-label="自定义项目颜色" value={markerDetails(marker)?.[2] ?? '#5b84c4'}
+          onChange={event => { setSaveFailed(!onSave({ kind: 'color', value: event.target.value })) }} />
+      </label>
       {saveFailed && <p className="danger" role="alert">标记未能保存，请重试。</p>}
     </div>
   </>

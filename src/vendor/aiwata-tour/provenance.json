@@ -1,0 +1,27 @@
+{
+  "revision": "6631a6af2c58fc498ef01fa5cc4b222fc8682683",
+  "driverVersion": "1.9.0",
+  "adaptations": "TypeScript erasure only; host wiring outside vendored modules.",
+  "files": [
+    {
+      "path": "apps/desktop/src/lib/tour/engine.ts",
+      "sha256": "579fa87cfc15bad0701e77dd7f1a178249e433f567c01da508c06dbcbfe1fbc0"
+    },
+    {
+      "path": "apps/desktop/src/lib/tour/collect-targets.ts",
+      "sha256": "57f8d8fd8404620f3578fba539137c91bb44e4633751d7c7922caef3777f2345"
+    },
+    {
+      "path": "driver.js@1.9.0/dist/driver.js.mjs",
+      "sha256": "226faa224a70df5bbe5a637c489941c004f840526359a468d7d23f8774d44a86"
+    },
+    {
+      "path": "driver.js@1.9.0/dist/driver.js.iife.js",
+      "sha256": "e52b65c66f23cbcdae8a0b68e378bfd7f6e29a664445fe4240067335e11f6843"
+    },
+    {
+      "path": "driver.js@1.9.0/dist/driver.css",
+      "sha256": "d095d440021fcf133ad46d37f18a2745fb76440f14f5208d17e203c039f765c9"
+    }
+  ]
+}
