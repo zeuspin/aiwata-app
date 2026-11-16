@@ -46,6 +46,7 @@ export function getBotAppearance(bot) {
   const [shape, index] = Object.hasOwn(seeded, id) ? seeded[id]
     : [shapeNames[hash % shapeNames.length], Math.floor(hash / shapeNames.length) % botBodyColors.length]
   const saved = bot.appearance
+  const primaryFallback = bot.isDefault && !saved
   const portrait = Object.hasOwn(botPortraits, saved?.portrait) ? saved.portrait : undefined
   return {
     mode: saved?.mode === 'peeking' ? 'peeking' : portrait && saved?.mode === 'portrait' ? 'portrait'
@@ -53,9 +54,9 @@ export function getBotAppearance(bot) {
     ...(portrait ? { portrait } : {}),
     ...(portrait && saved.portraitDesign ? { portraitDesign: getPortraitDesign(portrait, saved.portraitDesign) } : {}),
     ...(saved?.peekingDesign || saved?.mode === 'peeking' ? { peekingDesign: getPeekingDesign(saved?.peekingDesign) } : {}),
-    shape: Object.hasOwn(botShapes, saved?.shape) ? saved.shape : shape,
-    bodyColor: validColor(saved?.bodyColor) ?? botBodyColors[index][1],
-    eyeColor: validColor(saved?.eyeColor),
+    shape: Object.hasOwn(botShapes, saved?.shape) ? saved.shape : primaryFallback ? 'boxy' : shape,
+    bodyColor: validColor(saved?.bodyColor) ?? (primaryFallback ? '#141414' : botBodyColors[index][1]),
+    eyeColor: validColor(saved?.eyeColor) ?? (primaryFallback ? '#ffffff' : null),
     eyeStyle: Object.hasOwn(botEyeStyles, saved?.eyeStyle) ? saved.eyeStyle : 'pill',
   }
 }

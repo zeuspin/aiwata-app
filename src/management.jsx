@@ -1,3 +1,5 @@
+import { BotSettingsContent, InlineSettingsForm } from './bot-settings-content.jsx'
+import { gatewayGroup } from './live-room-state.mjs'
 import React, { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { getBotAppearance } from './bot-appearance.mjs'
 import { BotFace, GroupFace } from './bot-avatar.jsx'
@@ -133,7 +135,8 @@ const initialBotModel = bot => modelSelection(bot) ? modelKey(modelSelection(bot
 const botEditorTabs = [['basic', '基本信息'], ['avatar', '头像'], ['capabilities', '模型与能力']]
 const avatarModeLabels = { character: '几何角色', portrait: '人物头像', peeking: '探头头像', photo: '上传图片' }
 
-function BotEditor({ item, bots, management, onClose, onSave, live, details: initialDetails }) {
+function BotEditor({ item, bots, management, onClose, onSave, live, details: initialDetails, embedded, onDirtyChange, onBusyChange, onOpenProfileSection, onOpenNativeSettings, report }) {
+
   const [draftId] = useState(() => item?.id ?? newId())
   const [source, setSource] = useState(item)
   const [details, setDetails] = useState(initialDetails)
@@ -147,6 +150,9 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
   const [avatarError, setAvatarError] = useState('')
   const [previewState, setPreviewState] = useState('idle')
   const [page, setPage] = useState('basic')
+  const [avatarExpanded, setAvatarExpanded] = useState(false)
+  const tabs = embedded ? [['basic', '基本信息'], ['capabilities', '能力'], ['memory', '记忆'], ['automation', '自动化'], ['advanced', '高级']] : botEditorTabs
+  const EditorShell = embedded ? InlineSettingsForm : Dialog
   const editorId = useId()
   const panelBody = useRef(null)
   const avatarVersion = useRef(0)
@@ -226,7 +232,23 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
     reader.readAsDataURL(file)
   }
 
-  return <Dialog className="bot-editor-dialog" title={item ? '编辑 Bot' : '新建 Bot'} onClose={onClose}
+  return <EditorShell className="bot-editor-dialog" title={item ? "编辑 Bot" : "新建 Bot"} onClose={onClose}
+    onDirtyChange={onDirtyChange} onBusyChange={onBusyChange} dirtyToken={JSON.stringify([avatar, appearance])}
+    showActions={!embedded || ['basic', 'capabilities'].includes(page)}
+    afterForm={embedded && <div className="bot-settings-sections">
+      <section {...panelProps('memory')}><h3>{"全局长期记忆"}</h3><p>查看和维护 {item.name} 自己的长期记忆。此入口不包含项目专属记忆。</p><p className="bot-settings-note">新增记忆前先明确存放范围；没有说清楚时，先向你确认。</p>
+        <button type="button" className="secondary" onClick={() => onOpenProfileSection?.('memory', item.id)}>{"管理长期记忆"}</button></section>
+      <section {...panelProps('automation')}><h3>{"定时任务与消息连接"}</h3><p>仅管理 {item.name} 的任务和连接。</p><div className="bot-settings-actions">
+        <button type="button" className="secondary" onClick={() => onOpenProfileSection?.('tasks', item.id)}>{"管理定时任务"}</button>
+        <button type="button" className="secondary" onClick={() => onOpenProfileSection?.('connectors', item.id)}>{"管理消息连接器"}</button></div></section>
+      <section {...panelProps('advanced')}><h3>{"高级配置"}</h3><p>Profile ID：<code>{item.profile ?? item.id}</code></p><p>这些配置属于 {item.name}；当前会话的模型和审批仍在聊天中调整。</p>
+        {live?.native && onOpenNativeSettings ? <div className="bot-settings-actions">
+          <button type="button" className="secondary" onClick={() => onOpenNativeSettings('capabilities', item)}>{"完整技能、工具与 MCP 配置"}</button>
+          <button type="button" className="secondary" onClick={() => onOpenNativeSettings('settings', item)}>{"模型授权与高级设置"}</button>
+        </div> : <NativeBotControls live={live} bot={item} report={report} />}
+        {!live && <small>{"本地演示；原生模型授权与高级配置在桌面连接后可用。"}</small>}
+      </section>
+    </div>}
     submitDisabled={avatarPending || loadingSource} onSubmit={async form => {
     if (avatarPending || loadingSource) return '请等待档案与头像加载。'
     const id = draftId
@@ -267,43 +289,43 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
       return result.message || '请确认模型选择后再保存。'
     }
     return result
-  }} submit={confirmModel ? '确认模型并保存' : item ? '保存' : '创建'}>
-    <div className="bot-editor-tabs" role="tablist" aria-label="Bot 设置分类">
-      {botEditorTabs.map(([key, label], index) => <button key={key} type="button" role="tab" id={`${editorId}-tab-${key}`}
+  }} submit={confirmModel ? "确认模型并保存" : item ? "保存" : "创建"}>
+    <div className="bot-editor-tabs" role="tablist" aria-label={"Bot 设置分类"}>
+      {tabs.map(([key, label], index) => <button key={key} type="button" role="tab" id={`${editorId}-tab-${key}`}
         aria-selected={key === page} aria-controls={`${editorId}-panel-${key}`} tabIndex={key === page ? 0 : -1} onClick={() => showPage(key)}
         onKeyDown={event => {
-          const count = botEditorTabs.length
+          const count = tabs.length
           const next = { ArrowLeft: (index + count - 1) % count, ArrowRight: (index + 1) % count, Home: 0, End: count - 1 }[event.key]
           if (next === undefined) return
           event.preventDefault()
-          showPage(botEditorTabs[next][0])
+          showPage(tabs[next][0])
           event.currentTarget.parentElement.children[next].focus()
         }}>{label}</button>)}
     </div>
     <div className="bot-editor-body" ref={panelBody}>
       <section className="bot-editor-panel" {...panelProps('basic')}>
-        {!item && <label>配置来源<select value={source?.id ?? ''} onChange={event => selectSource(event.target.value)}>
-          <option value="">新建独立配置</option>
-          {bots.map(bot => <option key={bot.id} value={bot.id}>复制 {bot.name} 的配置</option>)}
+        {!item && <label>{"配置来源"}<select value={source?.id ?? ''} onChange={event => selectSource(event.target.value)}>
+          <option value="">{"新建独立配置"}</option>
+          {bots.map(bot => <option key={bot.id} value={bot.id}>{"复制"} {bot.name} 的配置</option>)}
         </select></label>}
         {sourceError && <p className="management-error" role="alert">{sourceError}</p>}
         <div className="bot-editor-identity">
           <button type="button" className="bot-editor-avatar-link" onClick={() => {
-            showPage('avatar')
-            document.getElementById(`${editorId}-tab-avatar`)?.focus()
+            if (embedded) setAvatarExpanded(value => !value)
+            else { showPage('avatar'); document.getElementById(`${editorId}-tab-avatar`)?.focus() }
           }}>
             <BotFace bot={draftBot} size="activity" still />
-            <span><strong>编辑头像</strong><small>{avatarModeLabels[appearance.mode]}</small></span>
+            <span><strong>{"编辑头像"}</strong><small>{avatarModeLabels[appearance.mode]}</small></span>
             <Icon name="right" size={14} />
           </button>
-          <Field label="显示名称" name="name" defaultValue={item?.name} placeholder="例如 编辑助理" maxLength={80} aria-required="true" autoFocus />
+          <Field label={"显示名称"} name="name" defaultValue={item?.name} placeholder={"例如 编辑助理"} maxLength={80} aria-required="true" autoFocus />
         </div>
         <div className="bot-editor-fields" key={sourceKey}>
-          <Field label="简介" name="description" defaultValue={source?.description} placeholder="简述这个 Bot 的职责" maxLength={200} />
-          <Text label="角色指令（SOUL.md）" name="soul" defaultValue={source?.soul} rows={5} placeholder="设定角色、工作方式与表达风格" />
+          <Field label={"简介"} name="description" defaultValue={source?.description} placeholder={"简述这个 Bot 的职责"} maxLength={200} />
+          <Text label={"角色指令（SOUL.md）"} name="soul" defaultValue={source?.soul} rows={5} placeholder={"设定角色、工作方式与表达风格"} />
         </div>
       </section>
-      <section className="bot-editor-panel" {...panelProps('avatar')}>
+      <section className="bot-editor-panel bot-settings-avatar" onChange={event => event.stopPropagation()} {...(embedded ? { hidden: page !== 'basic' || !avatarExpanded, 'aria-label': '头像设置' } : panelProps('avatar'))}>
         <BotAvatarPicker key={sourceKey} bot={draftBot} onChange={setAppearance}
           previewState={previewState} onPreviewState={setPreviewState} onUpload={pickAvatar} pending={avatarPending} error={avatarError}
           onRemovePhoto={() => {
@@ -318,29 +340,30 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
         <div className="bot-editor-fields" key={sourceKey}>
           <div className="management-field-pair">
             {live ? <NativeBotModelField live={live} profile={source?.profile ?? 'default'} choice={choice} currentModel={source?.model}
-              onChange={value => { setChoice(value); setConfirmModel(null) }} /> : <>            <label>模型<select value={choice} onChange={event => { setChoice(event.target.value); setConfirmModel(null) }}>
-              <option value="" disabled={live && Boolean(source?.model)}>工作区默认模型</option>
-              {live && source?.model && <option value="existing">{source.model} · 当前配置</option>}
+              onChange={value => { setChoice(value); setConfirmModel(null) }} /> : <>            <label>{"模型"}<select value={choice} onChange={event => { setChoice(event.target.value); setConfirmModel(null) }}>
+              <option value="" disabled={live && Boolean(source?.model)}>{"工作区默认模型"}</option>
+              {live && source?.model && <option value="existing">{source.model}{"· 当前配置"}</option>}
               {!live && models.map(model => <option key={modelKey(model)} value={modelKey(model)}>{model.label} · {model.description}</option>)}
-              <option value="custom">自定义模型</option>
+              <option value="custom">{"自定义模型"}</option>
             </select></label>
 </>}
-            <Field label="Profile ID" name="profile" readOnly={Boolean(item)} defaultValue={item?.profile ?? item?.id} placeholder="留空自动生成" maxLength={64} onChange={() => setConfirmModel(null)} />
+            {embedded ? <input type="hidden" name="profile" value={item.profile ?? item.id} /> : <Field label="Profile ID" name="profile" readOnly={Boolean(item)} defaultValue={item?.profile ?? item?.id} placeholder={"留空自动生成"} maxLength={64} onChange={() => setConfirmModel(null)} />}
           </div>
           {choice === 'custom' && <div className="management-field-pair">
-            <Field label="模型提供方" name="provider" defaultValue={source?.provider} onChange={() => setConfirmModel(null)} />
-            <Field label="模型 ID" name="model" defaultValue={source?.model} onChange={() => setConfirmModel(null)} />
+            <Field label={"模型提供方"} name="provider" defaultValue={source?.provider} onChange={() => setConfirmModel(null)} />
+            <Field label={"模型 ID"} name="model" defaultValue={source?.model} onChange={() => setConfirmModel(null)} />
           </div>}
-          <h3 className="bot-editor-capabilities-title">可用能力</h3>
+          {embedded && <><p className="bot-settings-note">{"默认模型与启用的能力属于这个 Bot。共享技能库的维护与这里的启用选择分别管理。"}</p><button type="button" className="secondary" onClick={() => onOpenProfileSection?.('skills', item.id)}>{"查看技能库"}</button></>}
+          <h3 className="bot-editor-capabilities-title">{"可用能力"}</h3>
           <div className="bot-editor-capabilities">
-            <fieldset className="management-members"><legend>已安装技能</legend>
+            <fieldset className="management-members"><legend>{"已安装技能"}</legend>
               {sourceSkills.filter(skill => skill.installed).map(skill => <label key={skill.id} className="management-check">
                 <input type="checkbox" name="skills" value={skill.id} defaultChecked={skill.enabled} disabled={skill.locked} />{skill.name}{skill.locked ? '（已锁定）' : ''}
               </label>)}
-              {!sourceSkills.some(skill => skill.installed) && <small>暂无已安装技能。</small>}
+              {!sourceSkills.some(skill => skill.installed) && <small>{"暂无已安装技能。"}</small>}
             </fieldset>
-            <fieldset className="management-members"><legend>工具组</legend>
-              <small>不勾选时继承默认工具组。</small>
+            <fieldset className="management-members"><legend>{"工具组"}</legend>
+              <small>{"不勾选时继承默认工具组。"}</small>
               {toolChoices.map(([id, label, enabled]) => <label key={id} className="management-check">
                 <input type="checkbox" name="toolsets" value={id} defaultChecked={live ? enabled : source?.toolsets?.includes(id)} />{label}
               </label>)}
@@ -349,20 +372,22 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
               {mcpChoices.map(([id, label, enabled]) => <label key={id} className="management-check">
                 <input type="checkbox" name="mcp" value={id} defaultChecked={live ? enabled : source?.mcpServers?.includes(id)} />{label}
               </label>)}
-              {live && !mcpChoices.length && <small>此 Profile 没有配置 MCP 服务器。</small>}
+              {live && !mcpChoices.length && <small>{"此 Profile 没有配置 MCP 服务器。"}</small>}
             </fieldset>
           </div>
         </div>
       </section>
     </div>
-  </Dialog>
+  </EditorShell>
 }
 
-function GroupEditor({ item, bots, onClose, onSave, live }) {
+function GroupEditor({ item, bots, onClose, onSave, live, embedded, onDirtyChange, onBusyChange }) {
+
   const [id] = useState(() => item?.id ?? newId())
   const [members, setMembers] = useState(() => resolveGroupMembers(item, bots))
   const [routing, setRouting] = useState(item?.routing ?? 'everyone')
-  return <Dialog title={item ? '编辑群聊' : '新建群聊'} onClose={onClose} onSubmit={form => {
+  const EditorShell = embedded ? InlineSettingsForm : Dialog
+  return <EditorShell onDirtyChange={onDirtyChange} onBusyChange={onBusyChange} title={item ? "编辑群聊" : "新建群聊"} onClose={onClose} onSubmit={form => {
     const name = valueOf(form, 'name')
     const lead = valueOf(form, 'lead')
     const notes = valueOf(form, 'notes')
@@ -375,36 +400,47 @@ function GroupEditor({ item, bots, onClose, onSave, live }) {
       purpose: valueOf(form, 'purpose'), notes,
       description: bots.filter(bot => members.includes(bot.id)).map(bot => bot.name).join(' · '),
     })
-  }} submit={item ? '保存' : '创建'}>
-    <Field label="群聊名称" name="name" defaultValue={item?.name} placeholder="例如 发布协作群" maxLength={80} required autoFocus />
-    {item ? <fieldset className="management-members"><legend>Bot 成员</legend>
+  }} submit={item ? "保存" : "创建"}>
+    <Field label={"群聊名称"} name="name" defaultValue={item?.name} placeholder={"例如 发布协作群"} maxLength={80} required autoFocus />
+    {item ? <fieldset className="management-members"><legend>{"Bot 成员"}</legend>
       <div className="management-tags">{bots.filter(bot => members.includes(bot.id)).map(bot => <Badge key={bot.id}>{bot.name}</Badge>)}</div>
-      <small>托管群的成员在创建时确定。</small>
-    </fieldset> : <fieldset className="management-members"><legend>Bot 成员（2 至 6 位）</legend>
+      <small>{"托管群的成员在创建时确定。"}</small>
+    </fieldset> : <fieldset className="management-members"><legend>{"Bot 成员（2 至 6 位）"}</legend>
       {bots.length ? bots.map(bot => <label key={bot.id} className="management-check">
         <input type="checkbox" checked={members.includes(bot.id)} onChange={event => setMembers(previous => event.target.checked
           ? [...previous, bot.id] : previous.filter(id => id !== bot.id))} />{bot.name}
-      </label>) : <small>请先创建 Bot。</small>}
+      </label>) : <small>{"请先创建 Bot。"}</small>}
     </fieldset>}
-    <label>响应方式<select aria-label="响应方式" value={routing} onChange={event => setRouting(event.target.value)}>
+    <label>{"响应方式"}<select aria-label={"响应方式"} value={routing} onChange={event => setRouting(event.target.value)}>
       {Object.entries(groupRouting).filter(([value]) => !live || (item?.routingModes ?? ['everyone', 'lead']).includes(value))
         .map(([value, label]) => <option value={value} key={value}>{label}</option>)}
     </select></label>
-    {routing === 'lead' && <label>主导 Bot<select aria-label="主导 Bot" name="lead" defaultValue={item?.lead ?? ''} required>
-      <option value="">选择成员</option>
+    {routing === 'lead' && <label>{"主导 Bot"}<select aria-label={"主导 Bot"} name="lead" defaultValue={item?.lead ?? ''} required>
+      <option value="">{"选择成员"}</option>
       {bots.filter(bot => members.includes(bot.id)).map(bot => <option value={bot.id} key={bot.id}>{bot.name}</option>)}
     </select></label>}
-    <Field label="群聊用途" name="purpose" defaultValue={item?.purpose} maxLength={500} />
-    <Text label="协作说明" name="notes" defaultValue={item?.notes} />
-  </Dialog>
+    <Field label={"群聊用途"} name="purpose" defaultValue={item?.purpose} maxLength={500} />
+    <Text label={"协作说明"} name="notes" defaultValue={item?.notes} />
+  </EditorShell>
 }
 
-function BotSettings({ selected, record, management, commit, api, onOpenChat, onNavigate, onOpenProfileSection, live, refresh, report }) {
+function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManageBot, onOpenNativeSettings, onSelectItem, search, onPageChange, record, account, createRequest, onConsumeCreate, management, commit, api, onOpenChat, onNavigate, onOpenProfileSection, live, refresh, report }) {
+
   const [dialog, setDialog] = useState(null)
   const [opening, setOpening] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const query = (search ?? '').trim().toLocaleLowerCase()
   const [candidates,setCandidates]=useState(null)
   const [candidateError,setCandidateError]=useState('')
   const [peerStatus,setPeerStatus]=useState({})
+  const consumedCreation = useRef(null)
+  useEffect(() => {
+    if (!createRequest || consumedCreation.current === createRequest.id) return
+    consumedCreation.current = createRequest.id
+    onConsumeCreate?.()
+    if (createRequest.kind === 'group') void openGroup()
+    else void openEditor()
+  }, [createRequest])
   const groupBots=dialog?.item ? [...record.bots,...(dialog.item.memberDetails??[]).filter(m=>!record.bots.some(bot=>bot.id===m.id))] : candidates??record.bots
   useEffect(()=>{
     if(dialog?.kind!=='group'||dialog.item||!live?.groupCandidates)return
@@ -414,12 +450,14 @@ function BotSettings({ selected, record, management, commit, api, onOpenChat, on
   },[dialog?.kind,dialog?.item,live])
   const close = () => setDialog(null)
   const save = (kind, item, message = '设置已保存', options) => commit(() => api.saveBotEntity(kind, item, options), message)
-  const bots = selected ? record.bots.filter(item => item.id === selected) : record.bots
-  const groups = selected ? record.groups.filter(item => item.id === selected) : record.groups
+  const matches = item => !query || [item.name, item.description, item.purpose, item.model].filter(Boolean).join(' ').toLocaleLowerCase().includes(query)
+  const bots = selected ? record.bots.filter(item => item.id === selected) : record.bots.filter(matches)
+  const groups = selected ? record.groups.filter(item => item.id === selected) : record.groups.filter(matches)
+  const selectedItem = selected && (bots[0] ?? groups[0])
   const references = dialog?.type === 'bot'
     ? record.groups.filter(group => resolveGroupMembers(group, record.bots).includes(dialog.item.id)).map(group => group.name)
     : []
-  const chatButton = item => onOpenChat && <button className="secondary" onClick={() => onOpenChat(item.id)}>打开会话</button>
+  const chatButton = item => onOpenChat && <button className="secondary" onClick={() => onOpenChat(item.id)}>{"打开会话"}</button>
 
   async function openEditor(item) {
     if (!live) { setDialog({ kind: 'bot', item }); return }
@@ -434,12 +472,12 @@ function BotSettings({ selected, record, management, commit, api, onOpenChat, on
     finally { setOpening(false) }
   }
 
-  async function saveBot(settings, options) {
-    const message = dialog.item ? 'Bot 设置已保存' : 'Bot 已创建'
+  async function saveBot(settings, options, editorItem = dialog?.item ?? selectedItem) {
+    const message = editorItem ? 'Bot 设置已保存' : 'Bot 已创建'
     if (!live) return save('bot', settings, message, options)
     const { profile, name, description, soul, model, provider, appearance, avatar } = settings
     const result = await live.saveBot({ profile, name, description, soul, model, provider, appearance, ...options,
-      ...(avatar !== (dialog.item?.avatar ?? '') ? { avatar } : {}),
+      ...(avatar !== (editorItem?.avatar ?? '') ? { avatar } : {}),
     })
     if (result.confirmRequired) return result
     const inventory = await live.bots()
@@ -462,17 +500,13 @@ function BotSettings({ selected, record, management, commit, api, onOpenChat, on
     try {
       const state = await live.room('groups.state', { room_id: item.id })
       if (api.current() !== record) return
-      const context = state.context
-      setDialog({ kind: 'group', item: { ...item, name: state.room.name, purpose: context?.purpose, notes: context?.notes,
-        routing: context?.routing, lead: context?.lead_member_id ? 'bot:' + state.room.members.find(member => member.member_id === context.lead_member_id)?.profile : null,
-        routingModes: state.driver_status?.routing_modes,
-      } })
+      setDialog({ kind: 'group', item: { ...item, ...gatewayGroup(state.room, state.context, state.driver_status, item) } })
     } catch (error) { if (api.current() === record) report(error.message, true) }
     finally { setOpening(false) }
   }
 
-  async function saveGroup(settings) {
-    const editing = Boolean(dialog.item)
+  async function saveGroup(settings, _options, editorItem = dialog?.item ?? selectedItem) {
+    const editing = Boolean(editorItem)
     const message = editing ? '群聊设置已保存' : '群聊已创建'
     if (!live) return save('group', settings, message)
     const room_id = settings.id
@@ -481,11 +515,11 @@ function BotSettings({ selected, record, management, commit, api, onOpenChat, on
       if (members.some(bot => !bot)) return '有成员不可用，请重新选择。'
       const created=await live.room('groups.create', { room_id, name: settings.name, members: members.map(bot=>({...bot})) })
       if(created?.unjoined?.length)setPeerStatus(previous=>({...previous,[room_id]:created.unjoined.map(item=>item.error).join('；')}))
-    } else if (settings.name !== dialog.item.name) {
+    } else if (settings.name !== editorItem.name) {
       await live.room('groups.rename', { room_id, name: settings.name, event_id: newId() })
     }
     const currentState = await live.room('groups.state', { room_id })
-    const selectedLead=groupBots.find(bot=>bot.id===settings.lead)
+    const selectedLead=editing ? groupMember(editorItem, record.bots, settings.lead) : groupBots.find(bot=>bot.id===settings.lead)
     const lead_member_id=currentState.room.members.find(member=>member.profile===selectedLead?.profile &&
       (selectedLead?.target?.kind==='peer' ? member.target?.installation_id===selectedLead.target.installation_id :
         selectedLead?.connectionId && selectedLead.connectionId!==live.route?.connectionId ? member.target?.kind==='peer' &&
@@ -540,60 +574,53 @@ function BotSettings({ selected, record, management, commit, api, onOpenChat, on
     report(result.settlementPending || result.registrationPending ? 'Bot 已删除，AIWATA 仍需清理部分旧路由。' : 'Bot 已删除')
   }
 
-  return <Frame live={live} icon="botChat" title="Bot 与群聊管理" description="为 Bot 配置独立 Profile，为群聊配置成员与响应方式。"
+  const detail = selectedItem && <BotSettingsContent key={selectedItem.id} item={selectedItem} kind={bots.length ? 'bot' : 'group'} record={record}
+    management={management} live={live} Editor={BotEditor} GroupEditor={GroupEditor} report={report}
+    onSave={bots.length ? saveBot : saveGroup} onDirtyChange={onDirtyChange} onBusyChange={onBusyChange}
+    onOpenProfileSection={onOpenProfileSection} onOpenNativeSettings={onOpenNativeSettings} />
+  if (embedded) return detail ?? <Empty>{"该 Bot 或群聊已移除。"}</Empty>
+  return <Frame live={live} icon="botChat" title={selectedItem ? selectedItem.name + (bots.length ? ' · Bot 设置' : ' · 群聊设置') : "全部 Bot 管理"}
+    description={selectedItem ? '设置仅作用于当前选中的 Bot 或群聊。' : '集中查找、创建和整理 Bot；具体能力在各自设置中调整。'}
     back={onNavigate && { label: '返回 Bot 与群聊', onClick: () => onNavigate('bots') }}
     actions={!selected && <>
-      <button className="secondary" onClick={() => void openGroup()}><Icon name="group" size={15} />新建群聊</button>
-      <button className="primary" disabled={opening} onClick={() => void openEditor()}><Icon name="add" size={15} />新建 Bot</button>
+      <button className="secondary" onClick={() => void openGroup()}><Icon name="group" size={15} />{"新建群聊"}</button>
+      <button className="primary" disabled={opening} onClick={() => void openEditor()}><Icon name="add" size={15} />{"新建 Bot"}</button>
     </>}>
-    {(!selected || bots.length > 0) && <Panel title="Bot" description="Profile 保存 Bot 的角色、模型和独立配置。">
-      {bots.length ? bots.map(bot => <div key={bot.id}>
-        <Entry face={<BotFace bot={bot} state={botPresence(record.chats[bot.id])} size="activity" still />} title={bot.name}
+    {selected ? detail ?? <Empty>{"该 Bot 或群聊已移除。"}</Empty> : <>
+      <div className="bot-manager-toolbar">
+        <input type="search" aria-label={"搜索 Bot 与群聊"} placeholder={"搜索名称、职责或模型"} value={search ?? ''} onChange={event => onPageChange?.({mainSearch: event.target.value})} />
+        <div className="bot-manager-filters" aria-label={"管理列表筛选"}>{[['all', '全部'], ['bots', 'Bot'], ['groups', '群聊']].map(([value, label]) =>
+          <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>
+      </div>
+      {filter !== 'groups' && <Panel title={'Bot · ' + bots.length}>
+        {bots.length ? bots.map(bot => <Entry key={bot.id} face={<BotFace bot={bot} state={botPresence(record.chats[bot.id])} size="activity" still />} title={bot.name}
           subtitle={[bot.description, modelSelection(bot)?.label ?? (bot.model || '工作区默认模型')].filter(Boolean).join(' · ')}>
           {chatButton(bot)}
-          <button className="secondary" disabled={opening} onClick={() => void openEditor(bot)}>编辑</button>
-          <IconButton icon="trash" label={'删除 Bot · ' + bot.name} disabled={Boolean(live && (!bot.identity || bot.isDefault))} title={bot.isDefault ? '默认 Bot 使用工作区 Profile，不能删除' : undefined}
+          <button className="secondary" aria-label={'设置 Bot · ' + bot.name} onClick={() => (onManageBot ?? onSelectItem)?.(bot.id)}>{"设置"}</button>
+          <IconButton icon="trash" label={'删除 Bot · ' + bot.name} disabled={Boolean(bot.isDefault || (live && !bot.identity))} title={bot.isDefault ? "默认 Bot 使用工作区 Profile，不能删除" : undefined}
             onClick={() => setDialog({ kind: 'remove', type: 'bot', item: bot })} />
-        </Entry>
-        <NativeBotControls live={live} bot={bot} report={report} />
-        {onOpenProfileSection && <div className="bot-profile-links" aria-label={bot.name + '的配置入口'}>
-          {[['skills', '技能工具'], ['connectors', '消息连接器'], ['memory', '记忆与学习'], ['tasks', '定时任务']].map(([section, label]) =>
-            <button key={section} className="secondary" onClick={() => onOpenProfileSection(section, bot.id)}>{label}</button>)}
-        </div>}
-      </div>) : <Empty>暂无 Bot。</Empty>}
-    </Panel>}
-    {(!selected || groups.length > 0) && <Panel title="群聊" description="响应方式控制一条新消息由哪些成员处理。">
-      {groups.length ? groups.map(group => {
-        const members = resolveGroupMembers(group, record.bots)
-        const lead = groupMember(group,record.bots,group.lead)
-        const routing = group.routing === 'lead' && !lead ? 'everyone' : group.routing ?? 'everyone'
-        return <div className="management-group" key={group.id}>
-          <Entry face={<GroupFace members={members.map(id => groupMember(group,record.bots,id))} large />}
+        </Entry>) : <Empty>{query ? '没有匹配的 Bot。' : '暂无 Bot。'}</Empty>}
+      </Panel>}
+      {filter !== 'bots' && <Panel title={'群聊 · ' + groups.length}>
+        {groups.length ? groups.map(group => <div key={group.id}>
+          <Entry face={<GroupFace account={account} members={resolveGroupMembers(group, record.bots).map(id => groupMember(group,record.bots,id))} large />}
             title={group.name} subtitle={group.purpose || '协作群聊'}>
             {chatButton(group)}
-            <button className="secondary" disabled={opening} onClick={() => void openGroup(group)}>编辑群聊设置</button>
-            {live?.retryGroupPeers && group.memberDetails?.some(m=>m.peer) && <button className="secondary" disabled={opening} onClick={()=>void reconnectPeers(group)}>重新连接远端成员</button>}
+            <button className="secondary" aria-label={'设置群聊 · ' + group.name} onClick={() => (onManageBot ?? onSelectItem)?.(group.id)}>{"设置"}</button>
+            {live?.retryGroupPeers && group.memberDetails?.some(m => m.peer) && <button className="secondary" disabled={opening} onClick={() => void reconnectPeers(group)}>{"重连成员"}</button>}
             <IconButton icon="trash" label={'解散群聊 · ' + group.name} onClick={() => setDialog({ kind: 'remove', type: 'group', item: group })} />
           </Entry>
-          {peerStatus[group.id] && <p role="alert" className="management-error">群聊已保留，部分成员未连接：{peerStatus[group.id]}</p>}
-          <div className="management-group-details">
-            <div className="management-tags">
-              <Badge>{groupRouting[routing]}{lead ? ' · ' + lead.name : ''}</Badge>
-              {members.map(id=>groupMember(group,record.bots,id)).filter(Boolean).map(bot => <Badge key={bot.id}>{bot.name}{bot.peer ? ' · '+({ready:'已连接',needs_reauthorization:'需要重新授权',unavailable:'暂不可用',missing:'尚未加入'}[group.peerStates?.find(state=>state.memberId===bot.memberId)?.status]??'尚未加入') : ''}</Badge>)}
-              {!members.length && <small>暂无成员</small>}
-            </div>
-          </div>
-        </div>
-      }) : <Empty>暂无群聊。</Empty>}
-    </Panel>}
-    {selected && !bots.length && !groups.length && <Empty>该 Bot 或群聊已移除。</Empty>}
+          {peerStatus[group.id] && <p role="alert" className="management-error">{"群聊已保留，部分成员未连接："}{peerStatus[group.id]}</p>}
+        </div>) : <Empty>{query ? '没有匹配的群聊。' : '暂无群聊。'}</Empty>}
+      </Panel>}
+    </>}
     {dialog?.kind === 'bot' && <BotEditor item={dialog.item} bots={record.bots} management={management} onClose={close}
       live={live} details={dialog.details} onSave={saveBot} />}
-    {dialog?.kind === 'group' && (live?.groupCandidates && !dialog.item && !candidates ? <Dialog title="新建群聊" onClose={close} submit={null}>
-      {candidateError ? <p role="alert">{candidateError}</p> : <p role="status">正在读取各连接的 Bot…</p>}
+    {dialog?.kind === 'group' && (live?.groupCandidates && !dialog.item && !candidates ? <Dialog title={"新建群聊"} onClose={close} submit={null}>
+      {candidateError ? <p role="alert">{candidateError}</p> : <p role="status">{"正在读取各连接的 Bot…"}</p>}
     </Dialog> : <GroupEditor item={dialog.item} bots={groupBots} onClose={close} live={live} onSave={saveGroup} />)}
-    {dialog?.kind === 'remove' && <Confirm title={dialog.type === 'group' ? '解散群聊？' : '删除 ' + dialog.item.name + '？'} onClose={close}
-      submit={dialog.type === 'group' ? '解散' : '删除'}
+    {dialog?.kind === 'remove' && <Confirm title={dialog.type === 'group' ? "解散群聊？" : '删除 ' + dialog.item.name + '？'} onClose={close}
+      submit={dialog.type === 'group' ? "解散" : "删除"}
       onConfirm={() => references.length ? '请先移除此 Bot 的群聊成员关系。'
         : live ? dialog.type === 'group' ? disbandGroup(dialog.item) : removeBot(dialog.item)
           : commit(() => api.removeBotEntity(dialog.type, dialog.item.id), '已移除 ' + dialog.item.name)}>

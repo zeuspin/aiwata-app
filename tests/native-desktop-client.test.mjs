@@ -214,3 +214,46 @@ test('closing still releases native sockets when authorization cancellation fail
  await assert.rejects(client.rpc('projects.list'),/关闭/)
 })
 test('native room disband requires its matching durable tombstone',async()=>{const f=fixture(),client=await createNativeDesktopClient({...f,route:{connectionId:'local',profile:'default'}});await assert.rejects(client.room('groups.disband',{room_id:'room',cancel_id:'cancel'}),/解散|确认/);await client.close()})
+
+test('roster refresh after a reply preserves the resolved canonical transcript',async()=>{
+ const f=fixture(),original=f.Gateway.prototype.request
+ f.Gateway.prototype.request=async function(method,params){
+  if(method==='profiles.list')return{profiles:[{name:'writer',canonical_session_id:'registry-root',canonical_session:{id:'registry-root',resolved_id:'stored-tip'}}]}
+  if(method==='session.resume')return{session_id:'runtime',stored_session_id:'stored-tip',messages:[{role:'user',content:'hello'},{role:'assistant',content:'answer'}],info:{},last_sequence:2}
+  return original.call(this,method,params)
+ }
+ const client=await createNativeDesktopClient({...f,route:{connectionId:'local',profile:'default'}})
+ const api=createWorkspace(null,null,{live:true,accounts:[{id:'native'}]});api.login('native')
+ api.syncGatewayBots((await client.bots()).bots)
+ api.hydrateGatewayChat('bot:writer',await client.openBot('writer'))
+ const chat=api.getChat('bot:writer'),messages=chat.messages
+ assert.equal(messages.length,2)
+ api.syncGatewayBots((await client.bots()).bots)
+ assert.equal(chat.gatewayStoredId,'stored-tip')
+ assert.equal(chat.gatewayId,'runtime')
+ assert.equal(chat.messages,messages,'metadata refresh must not clear completed replies')
+ await client.close()
+})
+
+
+test('first canonical publication and metadata revisions do not recreate the Bot chat',async()=>{
+ const f=fixture(),original=f.Gateway.prototype.request;let known=false,revision=0
+ f.Gateway.prototype.request=async function(method,params){
+  if(method==='profiles.list')return{profiles:[{name:'writer',path:'/owned/profiles/writer',ui_meta_revisions:{'hermes-bots':revision},...(known?{canonical_session_id:'stored-writer',canonical_session:{id:'stored-writer',resolved_id:'stored-writer'}}:{})}]}
+  if(method==='session.list')return{sessions:[]}
+  if(method==='session.create'){known=true;return{session_id:'runtime-writer',stored_session_id:'stored-writer'}}
+  if(method==='session.resume')return{session_id:'runtime-writer',stored_session_id:'stored-writer',messages:[],info:{}}
+  return original.call(this,method,params)
+ }
+ const client=await createNativeDesktopClient({...f,route:{connectionId:'local',profile:'default'}})
+ const api=createWorkspace(null,null,{live:true,accounts:[{id:'native'}]});api.login('native')
+ api.syncGatewayBots((await client.bots()).bots)
+ api.hydrateGatewayChat('bot:writer',await client.openBot('writer'))
+ const chat=api.getChat('bot:writer');api.changeChat(chat.id,{messages:[{role:'user',text:'hello'},{role:'agent',text:'answer'}],draft:'next draft'})
+ for(revision=0;revision<2;revision++){
+  api.syncGatewayBots((await client.bots()).bots)
+  assert.equal(api.getChat(chat.id),chat,'metadata token is not Bot incarnation identity')
+  assert.equal(chat.messages.length,2);assert.equal(chat.draft,'next draft')
+ }
+ await client.close()
+})

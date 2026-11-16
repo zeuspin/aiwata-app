@@ -96,3 +96,21 @@ test('inventory refresh cannot duplicate a pending capture under its durable ID'
   assert.equal(Object.values(f.api.current().chats).filter(row=>row.gatewayStoredId==='stored-capture').length,0)
   assert.equal(f.api.getChat(chat.id),chat)
 })
+
+test('main Bot creation uses automatic native skill expansion while preserving the user prompt',async()=>{
+ const f=fixture();f.live.route={profile:'default'}
+ f.api.syncGatewayBots([{profile:'default',name:'AIWATA',isDefault:true}])
+ const chat=f.api.getChat('bot:default'),text='帮我创建一个专门写文案的独立 Bot'
+ f.api.changeChat(chat.id,{gatewayId:'runtime-a',gatewayStoredId:'stored-a',draft:text})
+ f.live.skill=async()=>[{name:'aiwata-bot-management'}]
+ const expansions=[];f.live.capability=async(...args)=>{expansions.push(args);return{message:'TRUSTED_CREATION_SKILL\n'+text}}
+ const result=await submitLivePrompt({...f.options,chat})
+ assert.equal(result.ok,true)
+ assert.deepEqual(expansions,[['skill.expand','default',{session_id:'runtime-a',name:'aiwata-bot-management',arg:text}]])
+ const sent=f.calls.find(([method])=>method==='prompt.submit')[1]
+ assert.equal(sent.text,'TRUSTED_CREATION_SKILL\n'+text)
+ assert.equal(chat.lastInput.text,text)
+ f.api.hydrateGatewayChat(chat.id,{session_id:'runtime-a',stored_session_id:'stored-a',messages:[{role:'user',content:sent.text},{role:'assistant',content:'created'}],info:{}})
+ assert.equal(chat.messages[0].text,text,'reopened transcript preserves the real user request')
+ assert.equal(chat.messages[1].text,'created')
+})

@@ -94,14 +94,14 @@ function MentionText({ text, members }) {
   })
 }
 
-function SpeakerAvatar({ bot, name, user, account, active = false, state = 'idle' }) {
+function SpeakerAvatar({ bot, name, user, account, active = false, animate = active, state = 'idle' }) {
   return <span className="conversation-avatar" role="img" aria-label={name + (active ? '正在回复' : '的头像')}>
-    {user ? <span className="conversation-user-avatar">{account?.initial || '你'}</span>
-      : bot ? <BotFace bot={bot} size="activity" still={!active} state={state} /> : <Icon name="botChat" />}
+    {user ? <span className="conversation-user-avatar" style={{ '--avatar': account?.color }}>{account?.initial || '你'}</span>
+      : bot ? <BotFace bot={bot} size="activity" still={!animate} state={state} /> : <Icon name="botChat" />}
   </span>
 }
 
-function Message({ message, index, bot, members, account, conversational, onPreview, onFilePreview, onRetry, canRetry, onReply, onAttachmentPreview }) {
+function Message({ message, index, bot, members, account, conversational, showAvatar, animateAvatar = false, avatarState = 'idle', onPreview, onFilePreview, onRetry, canRetry, onReply, onAttachmentPreview }) {
   const speaker = message.memberId ? members.find(member => member.id === message.memberId) : bot
   const user = message.role === 'user'
   const author = user ? (message.scheduled ? message.author || '定时任务' : '你') : message.author || speaker?.name || 'Bot'
@@ -109,8 +109,8 @@ function Message({ message, index, bot, members, account, conversational, onPrev
   const reply = onReply && message.threadId && message.text && <button type="button" className={conversational ? 'conversation-reply' : 'secondary room-reply'}
     title="引用回复" aria-label={'引用回复 ' + (message.author ?? (user ? '你的消息' : author))} onClick={() => onReply(message.id)}>
     {conversational ? <Icon name="reply" /> : '引用回复'}</button>
-  return <article className={'message ' + message.role + (conversational ? ' conversation-message' : '')} data-message-index={index}>
-    {conversational && <SpeakerAvatar bot={speaker} name={author} user={user} account={account} />}
+  return <article className={'message ' + message.role + (conversational ? ' conversation-message' : '')} data-message-index={index} data-speaker-avatar={conversational ? showAvatar : undefined}>
+    {conversational && showAvatar && <SpeakerAvatar bot={speaker} name={author} user={user} account={account} animate={animateAvatar} state={avatarState} />}
     <div className="message-content">
     {conversational ? <header className="conversation-message-heading">
       <strong>{author}</strong>
@@ -166,6 +166,8 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
   const appliedTop = useRef(null)
   const run = chat.agentRun
   const request = run?.request
+  const showCurrentResponse = Boolean(chat.pending && !chat.gatewayUnknown && !run?.room?.paused)
+  const latestBotReply = chat.messages.findLastIndex(message => message.role === 'agent')
 
   useLayoutEffect(() => {
     if (!visible) return
@@ -210,7 +212,7 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
     onPositionChange(next)
   }
 
-  return <div className={'transcript agent-transcript' + (bot || group ? ' conversation-transcript' : '')} ref={scroll} aria-label="会话消息" onScroll={savePosition}>
+  return <div className={'transcript agent-transcript' + (bot || group ? ' conversation-transcript' : '') + (bot && !group ? ' private-conversation' : '')} ref={scroll} aria-label="会话消息" onScroll={savePosition}>
     {!chat.messages.length
       ? <div className="welcome">
           <img className="welcome-banner" src="./aiwata-banner.svg" alt="AIWATA" />
@@ -221,13 +223,17 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
       : <div className="message-list">{chat.messages.map((message, index) =>
           <Message key={message.id ?? index} message={message} index={index} onRetry={onRetry}
             bot={bot} members={members} account={account} conversational={Boolean(bot || group)}
+            showAvatar={Boolean(group) || message.role === 'user' || (!showCurrentResponse && index === latestBotReply)}
+            avatarState={bot && !group && index === latestBotReply ? botPresence(chat) : 'idle'}
+            animateAvatar={Boolean(bot && !group && !chat.gatewayUnknown && index === latestBotReply)}
             onPreview={onPreview} onFilePreview={onFilePreview} onAttachmentPreview={onAttachmentPreview} onReply={onReply}
             canRetry={!chat.pending && (group ? message.id === chat.lastInput?.runId + ':outcome'
               : index === chat.messages.length - 1 && !hasPromptContent({ text: chat.draft, attachments: chat.attachments }))} />)}
-        {chat.pending && !chat.gatewayUnknown && !run?.room?.paused && (group ? <GroupTyping members={members} chat={chat} /> : <article className={'message agent' + (bot ? ' conversation-message' : '')}>
+        {showCurrentResponse && (group ? <GroupTyping members={members} chat={chat} /> : <article className={'message agent' + (bot ? ' conversation-message' : '')}>
           {bot && <SpeakerAvatar bot={bot} name={bot.name} active state={botPresence(chat)} />}
           <div className="message-content">
           {bot && <header className="conversation-message-heading"><strong>{bot.name}</strong><small>{botPresenceLabels[botPresence(chat)]}</small></header>}
+          <div className="message-body">
           {run && <Activity turn={run} />}
           {run?.text && <p data-streaming="true">{run.text}</p>}
           {run?.preview && <button className="secondary agent-preview-link" onClick={() => onPreview(run.preview)}>打开{run.preview.label || '预览'}</button>}
@@ -237,6 +243,7 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
             {!bot && <span className="spinner" />}
             {bot ? botPresenceLabels[botPresence(chat)] : group ? '群成员正在处理' : 'Agent 正在工作'}
           </div>}
+          </div>
           </div>
         </article>)}
       </div>}

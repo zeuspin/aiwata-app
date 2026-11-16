@@ -1,16 +1,17 @@
-import React from 'react'
-import { IconButton } from './icons.jsx'
+import React, { useId } from 'react'
 import { BotFace, GroupFace } from './bot-avatar.jsx'
 import { botPresence, botPresenceLabels, roomMemberPresence } from './bot-presence.mjs'
 import { botHandle } from './room.mjs'
 import { groupRouting } from './management.mjs'
 import { models } from './composer.mjs'
 import './bot-conversation.css'
+import './bot-conversation-header.css'
 
 const states = { queued: '排队中', running: '执行中', completed: '已回复', waiting: '待确认',
   failed: '失败', denied: '操作已拒绝', stopped: '已停止', passed: '暂无补充' }
 
-export function BotConversationHeader({ bot, group, members, chat, onManage }) {
+export function BotConversationHeader({ bot, group, members, chat, account, onManage }) {
+  const descriptionId = useId()
   const room = chat.pending ? chat.agentRun?.room : chat.roomOutcome
   const request = chat.agentRun?.request
   const presence = bot ? botPresence(chat) : null
@@ -18,16 +19,22 @@ export function BotConversationHeader({ bot, group, members, chat, onManage }) {
     models.find(item => item.id === bot.model && item.provider === bot.provider)?.label || bot.model || '工作区默认模型')
   const lead = group?.routing === 'lead' && members.find(member => member.id === group.lead)
   const routing = groupRouting[group?.routing ?? 'everyone']
-  return <header className="bot-conversation-header">
-    <div className="bot-conversation-heading">
-      {bot ? <BotFace bot={bot} state={presence} /> : <GroupFace members={members} large />}
-      <div className="bot-conversation-identity">
-        <h2>{bot?.name ?? group.name}</h2>
-        <p>{bot ? [bot.description, model].filter(Boolean).join(' · ')
-          : [routing, lead?.name, group.purpose].filter(Boolean).join(' · ')}</p>
-      </div>
+  const name = bot?.name ?? group.name
+  const description = bot ? [bot.description, model].filter(Boolean).join(' · ')
+    : [routing, lead?.name, group.purpose].filter(Boolean).join(' · ')
+  return <header className="bot-conversation-header bot-conversation-header-compact">
+    <div className="bot-conversation-heading bot-conversation-heading-compact">
+      <h2 className="bot-conversation-title">
+        <button type="button" className="bot-conversation-pill" onClick={onManage}
+          aria-label={name + (bot ? '，Bot 设置' : '，群聊设置')} aria-describedby={descriptionId} title={name}>
+          {bot ? <BotFace bot={bot} size="activity" still /> : <GroupFace members={members} account={account} large />}
+          <span className="bot-conversation-name">{name}</span>
+        </button>
+      </h2>
+    </div>
+    <div className="bot-conversation-meta">
       {bot && <span className="bot-presence-label" data-presence={presence} role="status">{botPresenceLabels[presence]}</span>}
-      <IconButton icon="settings" label={bot ? 'Bot 设置' : '群聊设置'} onClick={onManage} />
+      <p id={descriptionId} className="bot-conversation-description" title={description}>{description}</p>
     </div>
     {group && <ul className="room-member-list" aria-label="群成员">
       {members.map(member => {

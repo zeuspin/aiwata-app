@@ -1,5 +1,7 @@
 import { parseSlash } from './composer.mjs'
 import { gatewayDraftFingerprint } from './live-aiwata.mjs'
+import { botCreationCommand } from './bot-creation-command.mjs'
+import { ensureBotManagementSkill } from './bot-inventory-sync.mjs'
 
 const rejected = message => ({ ok: false, code: 'submit-rejected', message, retryable: true })
 const unknown = message => ({ ok: false, code: 'timeout', message, retryable: false })
@@ -46,16 +48,25 @@ export async function submitLivePrompt({ live, api, chat, folder, active, operat
     }
     if (!unchanged() || !chat.gatewayId) return rejected('The target session is busy or unavailable.')
     let wireText = text
-    const command = parseSlash(text)
+    const explicitCommand = parseSlash(text)
+    const automaticCommand = explicitCommand ? null : botCreationCommand(live, chat, text)
+    const command = explicitCommand || automaticCommand
     if (command) {
       const saved = chat.gatewaySkill
       if (saved?.text === text && saved.sessionId === chat.gatewayId) wireText = saved.message
       else {
+        if (automaticCommand) {
+          await ensureBotManagementSkill(live, current)
+          if (!unchanged()) return rejected('The target session changed before dispatch.')
+        }
         const expansion = await live.capability('skill.expand', chat.gatewayProfile || 'default', { session_id: chat.gatewayId, name: command[0], arg: command[1] })
         if (!unchanged()) return rejected('The target session changed before dispatch.')
         wireText = expansion.message
         api.changeChat(id, { gatewaySkill: { text, sessionId: chat.gatewayId, message: wireText } })
       }
+    }
+    if (command && wireText !== text && !chat.gatewayPromptDisplays?.some(item => item.wireText === wireText)) {
+      api.changeChat(id, { gatewayPromptDisplays: [...(chat.gatewayPromptDisplays ?? []), { wireText, text }] })
     }
     const uploads = []
     for (const name of attachments) {

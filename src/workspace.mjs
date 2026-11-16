@@ -1,9 +1,10 @@
+import { sameBotOwner } from './bot-owner-identity.mjs'
 import { browserPatch, browserState, browserTabId, restoreBrowserActions, toolEditsFor, toolType } from './tool-tabs.mjs'
 import { desktopEventPatch } from './desktop-events.mjs'
 import { mergeConnectionRequest } from './connection-request.mjs'
 import { randomProjectMarker, markerDetails } from './conversation-meta.mjs'
 import { getBotAppearance } from './bot-appearance.mjs'
-import { accounts as demoAccounts, createChat, seedAccount, tools } from './fixtures.mjs'
+import { accounts as demoAccounts, createChat, ensureDemoPrimaryBot, seedAccount, tools } from './fixtures.mjs'
 import { closeTabs, conversationSection, insertTab } from './tabs.mjs'
 import { createMockAgent, projectAgentEvent } from './agent-session.mjs'
 import { resolveGroupMembers } from './management.mjs'
@@ -27,26 +28,28 @@ const storageKey = 'aiwata-ui-prototype:v1:accounts'
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max))
 
-export function minSidebarWidth(width, split) {
+export function minSidebarWidth(width, split, minimum = sideMinimum) {
   const available = width - railWidth - (split ? toolMinimum : 0)
-  return Math.min(sideMinimum, Math.floor(available * .45))
+  return Math.min(minimum, Math.floor(available * .45))
 }
 
 export function minToolWidth(width) {
   return Math.min(toolMinimum, Math.floor((width - railWidth) / 2))
 }
 
-export function fitPanels(saved, width, sidebar, split) {
+export function fitPanels(saved, width, sidebar, split, sidebarMinimum) {
   const maxPanels = width - railWidth - chatMinimum
-  const side = sidebar ? clamp(saved.side, minSidebarWidth(width, split), maxPanels - (split ? toolMinimum : 0)) : 0
+  // A smaller Bot minimum must not remove the ordinary narrow-window expansion room.
+  const maximumSide = Math.max(minSidebarWidth(width, split), maxPanels - (split ? toolMinimum : 0))
+  const side = sidebar ? clamp(saved.side, minSidebarWidth(width, split, sidebarMinimum), maximumSide) : 0
   const toolsWidth = split ? clamp(saved.tools, minToolWidth(width), maxPanels - side) : 0
   return { side, tools: toolsWidth }
 }
 
-export function resizePanels(start, width, edge, delta, sidebar, split = true) {
+export function resizePanels(start, width, edge, delta, sidebar, split = true, sidebarMinimum) {
   const maxPanels = width - railWidth - chatMinimum
   if (edge === 'left') {
-    return { ...start, side: clamp(start.side + delta, minSidebarWidth(width, split), Math.min(520, maxPanels - (split ? start.tools : 0))) }
+    return { ...start, side: clamp(start.side + delta, minSidebarWidth(width, split, sidebarMinimum), Math.min(520, Math.max(minSidebarWidth(width, split), maxPanels - (split ? start.tools : 0)))) }
   }
   return { ...start, tools: clamp(start.tools - delta, minToolWidth(width), maxPanels - (sidebar ? start.side : 0)) }
 }
@@ -160,7 +163,11 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
     const prior = attachmentStore && ['attachmentDetails', 'queue', 'messages', 'lastInput', 'gatewaySubmission', 'browser', 'toolInstances'].some(key => Object.hasOwn(patch, key))
       ? attachmentIds(chat) : null
     Object.assign(chat, patch)
-    chatVersions.set(chat, (chatVersions.get(chat) ?? 0) + 1)
+    // Reply deltas do not change annotation ownership or the pending draft.
+    if (['browser', 'toolInstances', 'tabs', 'title', 'projectId', 'gatewayStoredId', 'gatewayProfile',
+      'draft', 'attachments', 'attachmentDetails', 'archived'].some(key => Object.hasOwn(patch, key))) {
+      chatVersions.set(chat, (chatVersions.get(chat) ?? 0) + 1)
+    }
     if (persist() && prior?.size) {
       const kept = attachmentIds(chat)
       removeLocal(active, id, [...prior].filter(blobId => !kept.has(blobId)))
@@ -440,6 +447,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
     for (const group of record.groups) {
       if (!Array.isArray(group.members)) group.members = resolveGroupMembers(group, record.bots)
     }
+    if (!live) ensureDemoPrimaryBot(record)
     const chats = Object.values(record.chats)
     if (!live) for (const chat of chats) resetRun(chat)
     if (!Array.isArray(record.openChats)) {
@@ -514,6 +522,9 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
     const unknown = snapshot.pending?.find(item => item.status === 'unknown')
     const pending = snapshot.running || Boolean(snapshot.pending?.length || request)
     const transcript = gatewayTranscript(snapshot, { pending, files: !chat.gatewayRoom })
+    const promptDisplays = new Map((chat.gatewayPromptDisplays ?? []).map(item => [item.wireText, item.text]))
+    transcript.messages = transcript.messages.map(message => message.role === 'user' && promptDisplays.has(message.text)
+      ? { ...message, text: promptDisplays.get(message.text) } : message)
     const run = pending ? { text: '', tools: {}, children: {}, todos: [], segments: {}, ...chat.agentRun, request } : null
     if (run) run.tools = { ...run.tools, ...transcript.pendingTools }
     if (run && transcript.pendingFiles.length) run.filePreviews = transcript.pendingFiles.reduce(addFilePreview, run.filePreviews)
@@ -596,7 +607,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
       const currentBots = new Map(record.bots.map(bot => [bot.id, bot]))
       for (const bot of previous) {
         const currentBot = currentBots.get(bot.id)
-        if (currentBot && (!bot.identity || !currentBot.identity || bot.identity === currentBot.identity)) continue
+        if (currentBot && sameBotOwner(bot, currentBot)) continue
         const chat = record.chats[bot.id]
         const { remaining, active: activeChat } = closeTabs(record.openChats, record.activeChat, bot.id)
         record.openChats = remaining
@@ -607,9 +618,12 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
       }
       for (const bot of record.bots) {
         const chat = record.chats[bot.id] ??= createChat(bot.id, bot.name)
-        const changed = bot.canonicalId && chat.gatewayStoredId && bot.canonicalId !== chat.gatewayStoredId
+        const prior = previous.find(item => item.id === bot.id)
+        const sameCanonical = bot.canonicalIds?.includes(chat.gatewayStoredId) ||
+          bot.canonicalIds?.some(id => prior?.canonicalIds?.includes(id))
+        const changed = bot.canonicalId && chat.gatewayStoredId && bot.canonicalId !== chat.gatewayStoredId && !sameCanonical
         Object.assign(chat, { title: bot.name, gatewayProfile: bot.profile, source: 'own', projectId: null,
-          ...(bot.canonicalId ? { gatewayStoredId: bot.canonicalId } : {}),
+          ...(bot.canonicalId && (!sameCanonical || !chat.gatewayStoredId) ? { gatewayStoredId: bot.canonicalId } : {}),
           ...(changed ? { gatewayId: null, gatewaySeq: 0, pending: null, gatewayUnknown: null,
             gatewayAdmission: null, gatewaySubmission: null, agentRun: null, messages: [] } : {}),
         })
@@ -784,6 +798,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
         if (entity.members && (entity.members.length !== roster.length || roster.some(id => !entity.members.includes(id)))) return false
         entity = { ...entity, members: roster }
       }
+      if (kind === 'bot' && list[index]?.isDefault) entity = { ...entity, isDefault: true }
       if (kind === 'bot' && entity.appearance) entity = { ...entity, appearance: getBotAppearance(entity) }
       if (index < 0) list.push(entity)
       else list[index] = entity
@@ -800,7 +815,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
       const record = current()
       const key = kind === 'bot' ? 'bots' : kind === 'group' ? 'groups' : null
       if (!key || !record?.[key].some(item => item.id === id) || record.chats[id]?.pending) return false
-      if (key === 'bots' && record.groups.some(group => resolveGroupMembers(group, record.bots).includes(id))) return false
+      if (key === 'bots' && (record.bots.find(bot => bot.id === id)?.isDefault || record.groups.some(group => resolveGroupMembers(group, record.bots).includes(id)))) return false
       record[key] = record[key].filter(item => item.id !== id)
       const chat = record.chats[id]
       delete record.chats[id]

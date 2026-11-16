@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react'
 import { ConversationMarker, ConversationStatus, describeChat, ProjectMarkerPicker } from './conversation-meta.jsx'
+import { BotDirectory } from './bot-directory.jsx'
 import { BotFace, GroupFace } from './bot-avatar.jsx'
-import { botPresence, botPresenceLabels } from './bot-presence.mjs'
 import { Icon, IconButton } from './icons.jsx'
 import { getManagement, groupMember, platforms, resolveGroupMembers } from './management.mjs'
 import { ArchivePolicy } from './archive-policy.jsx'
@@ -116,8 +116,9 @@ export function contextItems(record, section) {
   return items[section] ?? []
 }
 
-export function ContextList({ section, record, chat, select, newChat, createProject, selectItem, selectedItem,
-  onChatMenu, onToggleProject, onManageProject, onProjectMarkerChange, onManageBots, visible, onSearchChange, onListScroll, onOpenSection }) {
+export function ContextList({ section, record, account, chat, select, newChat, createProject, selectItem, selectedItem,
+  onChatMenu, onToggleProject, onManageProject, onProjectMarkerChange, onManageBots, onCreateBot, onMarkUnread, compact, onExpandBots, visible, onSearchChange, onListScroll, onOpenSection }) {
+
   const collapsed = record.navigation?.collapsedProjects ?? []
   const { searching = false, search = '', scrollTop = 0 } = record.navigation?.modules?.[section] ?? {}
   const list = useRef(null)
@@ -125,7 +126,7 @@ export function ContextList({ section, record, chat, select, newChat, createProj
   const restoredTop = useRef(null)
 
   useLayoutEffect(() => {
-    if (!visible) return
+    if (!visible || section === 'bots') return
     list.current.scrollTop = scrollTop
     restoredTop.current = list.current.scrollTop
   }, [visible, scrollTop])
@@ -146,11 +147,13 @@ export function ContextList({ section, record, chat, select, newChat, createProj
     onListScroll(top)
   }
 
-  const title = { 'project-settings': '项目设置', 'bot-settings': 'Bot 与群聊管理' }[section] ?? sections.find(item => item.id === section)?.title
+  const title = { 'project-settings': '项目设置', 'bot-settings': '全部 Bot 管理' }[section] ?? sections.find(item => item.id === section)?.title
   const match = label => label.toLowerCase().includes(search.trim().toLowerCase())
   const projectChats = Object.values(record.chats).filter(item => ![...record.bots, ...record.groups].some(bot => bot.id === item.id))
   const items = contextItems(record, section)
-  const groupFace = group => <GroupFace members={resolveGroupMembers(group, record.bots).map(id => groupMember(group,record.bots,id))} />
+  const groupFace = group => <GroupFace account={account} members={resolveGroupMembers(group, record.bots).map(id => groupMember(group,record.bots,id))} />
+  if (section === 'bots') return <BotDirectory {...{ record, account, chat, select, onManageBots, onCreateBot, onMarkUnread,
+    compact, onExpandBots, visible, onSearchChange, onListScroll, onOpenSection }} />
   return <>
     <header className="context-header">
       <h1>{section === 'projects' ? 'AIWATA' : title}</h1>
@@ -189,24 +192,6 @@ export function ContextList({ section, record, chat, select, newChat, createProj
         {projectChats.filter(item => !item.archived && !item.projectId && match(item.title)).map(item =>
           <ChatRow key={item.id} item={item} current={chat?.id === item.id} select={select} onMenu={onChatMenu} />)}
       </>}
-      {section === 'bots' && [
-        { title: 'Bot', data: record.bots, icon: 'bot' }, { title: '群聊', data: record.groups, icon: 'group' },
-      ].map(group => <div key={group.title} className="project-group">
-        <div className="context-label">{group.title}</div>
-        {group.data.filter(item => match(item.name)).map(item => {
-          const session = record.chats[item.id]
-          const presence = group.icon === 'bot' ? botPresence(session) : null
-          return <div key={item.id} className="chat-row-wrap managed-chat-row">
-            <button className="context-row" title={presence ? item.name + ' · ' + botPresenceLabels[presence] : undefined}
-              aria-description={presence ? 'Bot ' + botPresenceLabels[presence] + '；会话' + describeChat(session) : describeChat(session)}
-              aria-current={chat?.id === item.id ? 'page' : undefined} onClick={() => select(item.id)}>
-              {presence ? <BotFace bot={item} state={presence} size="small" /> : groupFace(item)}
-              <span className="chat-name">{item.name}</span><ConversationStatus chat={session} />
-            </button>
-            {onManageBots && <IconButton className="chat-row-menu" icon="settings" label={'管理 · ' + item.name} onClick={() => onManageBots(item.id)} />}
-          </div>
-        })}
-      </div>)}
       {items.filter(([, label]) => match(label)).map(([id, label, icon]) => {
         const current = (selectedItem ?? (section === 'skills' ? 'installed' : 'all')) === id
         if (section === 'project-settings' && id !== 'all') {

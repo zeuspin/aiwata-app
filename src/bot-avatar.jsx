@@ -1,10 +1,10 @@
-import React, { useId } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { automaticEyeColor, botAppearanceSeed, botShapes, getBotAppearance } from './bot-appearance.mjs'
 import { BotPortrait } from './bot-portrait.jsx'
 import { PeekingPortrait } from './bot-peeking.jsx'
 import { peekingPalettes } from './bot-peeking.mjs'
 import { resolveBotPortrait } from './bot-portraits.mjs'
-import { Icon } from './icons.jsx'
+import { observeInteractiveBot } from './bot-avatar-motion.mjs'
 import './bot-avatar.css'
 
 function Eyes({ state, style }) {
@@ -35,9 +35,17 @@ const badgePaths = {
   stopped: 'M30 29v6m4-6v6',
 }
 
-export function BotFace({ bot, size = 'normal', state = 'idle', still = false }) {
+export function BotFace({ bot, size = 'normal', state = 'idle', still = false, interactive = false }) {
   const gradient = useId()
-  const { mode, portrait, portraitDesign, peekingDesign, shape, bodyColor, eyeColor, eyeStyle } = getBotAppearance(bot)
+  const face = useRef(null)
+  const [failedPhoto, setFailedPhoto] = useState(null)
+  useEffect(() => setFailedPhoto(null), [bot.id, bot.avatar])
+  let { mode, portrait, portraitDesign, peekingDesign, shape, bodyColor, eyeColor, eyeStyle } = getBotAppearance(bot)
+  if (mode === 'photo' && failedPhoto?.id === bot.id && failedPhoto.src === bot.avatar) mode = 'character'
+  useEffect(() => {
+    if (interactive && !still && mode !== 'photo') return observeInteractiveBot(face.current)
+  }, [interactive, still, mode])
+  const flat = interactive || (bot.isDefault && !bot.appearance)
   const person = mode === 'portrait' ? resolveBotPortrait(portrait, portraitDesign) : undefined
   const { path, eyeY } = botShapes[shape]
   const effectY = person ? 2 : eyeY ?? 0
@@ -46,12 +54,13 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
   const autoInk = automaticEyeColor(bodyColor)
   const delay = (botAppearanceSeed(bot) % 4000) / 1000
   const badge = badgePaths[state]
-  return <span className={'bot-avatar bot-avatar-' + size} data-bot-state={state} data-bot-still={still || undefined}
+  return <span ref={face} className={'bot-avatar bot-avatar-' + size} data-bot-state={state} data-bot-still={still || undefined}
+    data-bot-interactive={interactive || undefined}
     data-bot-shape={mode === 'character' ? shape : undefined} data-bot-avatar-mode={mode}
     data-bot-portrait={person ? portrait : undefined}
     style={{ '--bot-base': mode === 'peeking' ? peekingPalettes.clothing[peekingDesign.clothing].colors[0] : person ? person.shirt[0] : bodyColor, '--bot-ink': eyeColor ?? autoInk, '--bot-outline': eyeColor ? autoInk : 'transparent',
       '--bot-delay': '-' + delay + 's' }} aria-hidden="true">
-    {mode === 'photo' && <span className="bot-avatar-photo"><img src={bot.avatar} alt="" /></span>}
+    {mode === 'photo' && <span className="bot-avatar-photo"><img src={bot.avatar} alt="" onError={() => setFailedPhoto({ id: bot.id, src: bot.avatar })} /></span>}
     <svg viewBox="0 0 64 64" focusable="false">
       <defs>
         <linearGradient id={gradient} x1="15%" y1="0%" x2="80%" y2="100%">
@@ -59,23 +68,23 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
         </linearGradient>
         {mode === 'character' && <clipPath id={gradient + '-shape'}><path d={path} /></clipPath>}
       </defs>
-      {person && <BotPortrait portrait={person} state={state} still={still} />}
+      {person && <BotPortrait portrait={person} state={state} still={still || interactive} />}
       {mode === 'peeking' && <PeekingPortrait design={peekingDesign} state={state} still={still} />}
       <g className="bot-avatar-orbit" fill="none" strokeLinecap="round">
         <path d="M11 16a26 26 0 0 1 18-10m21 45a26 26 0 0 1-14 7" />
         <circle cx="54" cy="17" r="1.6" fill="currentColor" stroke="none" />
       </g>
       {mode === 'character' && <g className="bot-avatar-body">
-        <path d={path} fill={`url(#${gradient})`} style={{ stroke: shade }} strokeOpacity=".28" strokeWidth="1.1" />
+        <path d={path} fill={flat ? bodyColor : `url(#${gradient})`} style={{ stroke: flat ? 'none' : shade }} strokeOpacity=".28" strokeWidth="1.1" />
         <g clipPath={`url(#${gradient}-shape)`}>
-          <path className="bot-avatar-highlight" d="M17 26c2-4 6-7 11-8" fill="none" stroke="#fff" strokeOpacity=".52" strokeWidth="2.3" strokeLinecap="round" />
+          {!flat && <path className="bot-avatar-highlight" d="M17 26c2-4 6-7 11-8" fill="none" stroke="#fff" strokeOpacity=".52" strokeWidth="2.3" strokeLinecap="round" />}
           <g transform={eyeY ? `translate(0 ${eyeY})` : undefined}>
             <Eyes state={state} style={eyeStyle} />
-            {state === 'idle' && !still && <ellipse className="bot-avatar-idle-mouth" cx="32" cy="43" rx="2.7" ry="2.1" />}
+            {state === 'idle' && !still && !interactive && <ellipse className="bot-avatar-idle-mouth" cx="32" cy="43" rx="2.7" ry="2.1" />}
           </g>
         </g>
       </g>}
-      {state === 'idle' && !still && mode !== 'peeking' && <g className="bot-avatar-idle-effects">
+      {state === 'idle' && !still && !interactive && mode !== 'peeking' && mode !== 'photo' && <g className="bot-avatar-idle-effects">
         <path className="bot-avatar-idle-note" d="M49 8v11a3 3 0 1 1-2-2.8V7l10-3v4Z" />
         <g className="bot-avatar-gum">
           <circle cx="35" cy={42 + effectY} r="10" />
@@ -83,7 +92,7 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
         </g>
         <path className="bot-avatar-gum-pop" d={`M24 ${35 + effectY}l-3-3m14 0v-4m10 7 4-3m-3 15 4 2`} />
       </g>}
-      {state === 'thinking' && <g className="bot-avatar-idea">
+      {state === 'thinking' && !interactive && mode !== 'photo' && <g className="bot-avatar-idea">
         <g className="bot-avatar-bulb" strokeLinecap="round" strokeLinejoin="round">
           <path className="bot-avatar-bulb-rays" d="M48 1v1m10 3 2-2m0 10h3M36 13h-3m5-8-2-2" fill="none" />
           <path className="bot-avatar-bulb-glass" d="M44 21v-2c0-2-4-3-4-8a8 8 0 0 1 16 0c0 5-4 6-4 8v2Z" />
@@ -105,9 +114,9 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false })
   </span>
 }
 
-export function GroupFace({ members, large = false }) {
+export function GroupFace({ members, account, large = false }) {
   return <span className={large ? 'group-face group-face-large' : 'group-face'} aria-hidden="true">
-    {members.length ? members.slice(0, 4).map(bot => <BotFace key={bot.id} bot={bot} size="small" still />)
-      : <Icon name="group" size={large ? 19 : 17} />}
+    <span className="group-user-avatar" style={{ '--avatar': account?.color }} title={account?.name || '你'}>{account?.initial || '你'}</span>
+    {members.filter(Boolean).slice(0, 3).map(bot => <BotFace key={bot.id} bot={bot} size="small" still />)}
   </span>
 }

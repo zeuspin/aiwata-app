@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createBotInventorySync, ensureBotManagementSkill } from './bot-inventory-sync.mjs'
 import { submitLivePrompt } from './submit-live-prompt.mjs'
 import { createDesktopRequestDispatcher } from './desktop-requests.mjs'
 
@@ -18,6 +19,9 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
   const modelChange = useRef(null)
   const currentSend = useRef(null)
   const watching = useRef(false)
+  const connection = useRef(live)
+  connection.current = live
+  const syncBots = useRef(null)
   const currentChat = useRef(chatId)
   const reportError = useRef(report)
   const afterAcceptance = useRef(onAccepted)
@@ -32,7 +36,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
   inspectDesktop.current = onDesktopRequest
   desktopEvent.current = onDesktopEvent
   nativeEvent.current = onNativeEvent
-  const active = () => watching.current && api.accountId === accountId
+  const active = () => watching.current && api.accountId === accountId && connection.current === live
   const call = (chat, method, params) => live.rpc(method, params, chat.gatewayProfile)
   const resume = chat => call(chat, 'session.resume', { session_id: chat.gatewayStoredId, ...(live.native ? { source: 'desktop' } : {}) })
 
@@ -49,6 +53,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
     if (!active() || !api.applyGatewayFrame(id, frame, currentChat.current === id)) return false
     refresh()
     const event = frame.params
+    if (event?.type === 'message.complete') void syncBots.current?.()
     const session = api.getChat(id)
     if (notifyDesktop && active() && currentChat.current === id && session &&
         profileKey(session.gatewayProfile) === profileKey(frame.profile) &&
@@ -131,6 +136,13 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
   useEffect(() => {
     if (!live) return
     watching.current = true
+    let currentInventory = true
+    const inventoryActive = () => currentInventory && active()
+    const refreshInventory = createBotInventorySync({ live, api, active: inventoryActive, refresh, report: (...args) => reportError.current(...args) })
+    syncBots.current = refreshInventory
+    void ensureBotManagementSkill(live, inventoryActive).catch(error => {
+      if (inventoryActive()) reportError.current('主 Bot 创建技能未就绪：' + error.message, true)
+    })
     setDesktopRequestBusy(null)
     setDesktopRequestError('')
     const resolveSession = frame => {
@@ -175,6 +187,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
       setStatus(next)
       if (next !== 'connected') dispatcher.disconnect()
       if (next === 'connected') {
+        void refreshInventory()
         void checkModel()
         const { chats, newChatDraft, gatewayCaptureDrafts = {} } = api.current()
         const ids = new Set([currentChat.current, newChatDraft?.gatewaySubmission ? newChatDraft.id : null,
@@ -185,7 +198,9 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
     return () => {
       dispatcher.dispose()
       if (desktopDispatcher.current === dispatcher) desktopDispatcher.current = null
+      currentInventory = false
       watching.current = false
+      if (syncBots.current === refreshInventory) syncBots.current = null
       stopWatching()
     }
   }, [live, api, accountId, refresh])
@@ -198,7 +213,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
     if (live && chatId && status === 'connected' && !api.getChat(chatId)?.pending) {
       void open(chatId)?.catch(error => reportError.current(error.message, true))
     }
-  }, [live, chatId, status, browserTurnSettled])
+  }, [live, chatId, status, browserTurnSettled, selectedChat?.gatewayStoredId])
 
   async function mutate(chat, operation, payload) {
     if (!active() || !chat?.gatewayStoredId) throw new Error('找不到已保存的会话。')

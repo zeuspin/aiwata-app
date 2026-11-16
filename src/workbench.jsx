@@ -25,6 +25,7 @@ import { LiveVideo, liveVideoTool } from './live-video.jsx'
 import { tools } from './fixtures.mjs'
 import { Icon, IconButton, toolIcons } from './icons.jsx'
 import { Management } from './management.jsx'
+import { BotSettingsDrawer } from './bot-settings-drawer.jsx'
 import { groupMember, managedSections, resolveGroupMembers } from './management.mjs'
 import { routeRoomMessage } from './room.mjs'
 import { ArchiveList, ContextList, Rail, contextItems } from './navigation.jsx'
@@ -39,6 +40,7 @@ import AgentTerminal from './agent-terminal.jsx'
 import { LiveConnectionRequest } from './live-connection-request.jsx'
 import { mergeConnectionRequest } from './connection-request.mjs'
 import { chatMoveTargets, contextBreakpoint, fitPanels, initialPanels, minSidebarWidth, minToolWidth, moveChatToProject, railWidth, resizePanels, setChatArchived, viewAtWidth } from './workspace.mjs'
+import { botSidebarCompactWidth, botSidebarCompactThreshold, botSidebarExpandedMinimum, botSidebarKeyWidth, botSidebarWidthPatch, expandedBotSidebarWidth, savedBotSidebarWidth } from './bot-sidebar.mjs'
 
 const chatSections = ['projects', 'bots']
 const nextMode = { hidden: 'split', split: 'full', full: 'hidden' }
@@ -60,7 +62,8 @@ function lastChatInSection(record, section) {
 }
 
 function restoreRoute(record, section) {
-  const savedItem = record.navigation?.modules?.[section]?.item
+  // Individual Bot settings now live in guarded drawers rather than saved page routes.
+  const savedItem = section === 'bot-settings' ? null : record.navigation?.modules?.[section]?.item
   const fresh = section === 'projects' && Boolean(record.newChatDraft && record.navigation?.modules?.projects?.draftOpen)
   return {
     section, fresh, chatId: fresh ? null : lastChatInSection(record, section),
@@ -134,6 +137,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const canChooseProject = section === 'projects' && composerChat && (!live || !composerChat.gatewayId) &&
     !composerChat.messages.length && !composerChat.pending && !composerChat.queue?.length
   const [panels, setPanels] = useState(() => ({ ...initialPanels, ...record.preferredPanelWidths }))
+  const [botSidebarWidth, setBotSidebarWidth] = useState(() => savedBotSidebarWidth(record.navigation?.modules?.bots, panels.side))
   const [chatFocus, setChatFocus] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [capabilityPanel, setCapabilityPanel] = useState(null)
@@ -143,6 +147,13 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const [tabDialog, setTabDialog] = useState(null)
   const [transcriptVersion, setTranscriptVersion] = useState(0)
   const [creating, setCreating] = useState(false)
+  const [botCreateRequest, setBotCreateRequest] = useState(null)
+  const [botSettingsId, setBotSettingsId] = useState(null)
+  const botSettingsTrigger = useRef(null)
+  const [botSettingsDirty, setBotSettingsDirty] = useState(false)
+  const [botSettingsBusy, setBotSettingsBusy] = useState(false)
+  const settingsBot = record.bots.find(bot => bot.id === botSettingsId)
+  const settingsGroup = record.groups.find(group => group.id === botSettingsId)
   const [toast, setToast] = useState(null)
   const [toolsByChat, setToolsByChat] = useState({})
   const [previewPartition, setPreviewPartition] = useState(null)
@@ -276,7 +287,12 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const replacesChat = view === 'replace'
   const contextVisible = !full && sidebar
   const floatingSection = !full && (!contextVisible || railPanel?.section === 'archive') ? railPanel?.section : null
-  const fitted = fitPanels(panels, viewport, contextVisible, split)
+  const botSidebar = section === 'bots'
+  // An expanded sidebar can be narrower than 160px when the window itself is narrow.
+  const botCompactThreshold = Math.max(botSidebarCompactWidth + 1, Math.min(botSidebarCompactThreshold, minSidebarWidth(viewport, split)))
+  const botCompact = botSidebarWidth < botCompactThreshold
+  const sidebarMinimum = botSidebar && (botCompact || drag.current?.botResize) ? botSidebarCompactWidth : undefined
+  const fitted = fitPanels(botSidebar ? { ...panels, side: botSidebarWidth } : panels, viewport, contextVisible, split, sidebarMinimum)
   const toolsWidth = replacesChat ? viewport - railWidth - fitted.side : fitted.tools
   const visibleTools = view !== 'hidden'
   const observesTool = tool => Boolean(live && visibleTools && (toolType(chat, activeTool) === tool || (preview?.chatId === chatId && toolType(chat, preview?.tool) === tool)))
@@ -691,6 +707,28 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     setCreating({ chatId })
   }
 
+  function openBotSettings(id) {
+    botSettingsTrigger.current = document.activeElement
+    setMenu('')
+    setContextAction(null)
+    closeRailPanel()
+    setBotSettingsDirty(false)
+    setBotSettingsBusy(false)
+    setBotSettingsId(id)
+  }
+
+  function closeBotSettings() {
+    if (botSettingsBusy) return false
+    if (botSettingsDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return false
+    setBotSettingsId(null)
+    setBotSettingsDirty(false)
+    return true
+  }
+
+  function leaveBotSettings(action) {
+    if (closeBotSettings()) action()
+  }
+
   function manage(section, item = null) {
     go({ section, chatId: null, item })
   }
@@ -1044,6 +1082,12 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
 
   useEffect(() => {
     function shortcuts(event) {
+      if (event.key === 'Escape' && drag.current) {
+        event.preventDefault()
+        event.stopPropagation()
+        finishPanelDrag(false)
+        return
+      }
       if (event.defaultPrevented || event.target.closest('dialog, :popover-open')) return
       if (event.key === 'Escape') {
         if (floatingSection && !contextAction) {
@@ -1074,44 +1118,86 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     return () => window.removeEventListener('keydown', shortcuts)
   })
 
+  function commitPanelWidth(field, width, botResize) {
+    if (api.current() !== record) return
+    if (botResize) {
+      const patch = botSidebarWidthPatch(width >= botCompactThreshold ? Math.max(botSidebarExpandedMinimum, width) : width)
+      setBotSidebarWidth(patch.sidebarWidth)
+      api.updateNavigationModule('bots', patch)
+    } else {
+      setPanels(current => ({ ...current, [field]: width }))
+      api.savePanelWidth(field, width)
+    }
+  }
+
+  function expandBots() {
+    commitPanelWidth('side', expandedBotSidebarWidth(record.navigation?.modules?.bots, panels.side), true)
+  }
+
+  function finishPanelDrag(commit, event) {
+    const current = drag.current
+    if (!current || (event && current.pointerId !== event.pointerId)) return
+    drag.current = null
+    setDragging(false)
+    if (commit && current.width != null && current.width !== current.start[current.field]) {
+      commitPanelWidth(current.field, current.width, current.botResize)
+    } else {
+      setPanels(current.saved)
+      setBotSidebarWidth(current.savedBotWidth)
+    }
+    const target = event?.currentTarget ?? current.target
+    if (target?.hasPointerCapture(current.pointerId)) target.releasePointerCapture(current.pointerId)
+  }
+
+  useEffect(() => {
+    if (drag.current && (drag.current.section !== section || !contextVisible)) finishPanelDrag(false)
+  }, [section, contextVisible])
+
   function separator(edge) {
     const field = edge === 'left' ? 'side' : 'tools'
     const dimension = fitted[field]
+    const botResize = botSidebar && edge === 'left'
+    const minimum = botResize ? botSidebarCompactWidth : minSidebarWidth(viewport, split)
     return <div className={'separator ' + edge} role="separator" tabIndex={0} aria-orientation="vertical"
-      aria-label={edge === 'left' ? '调整项目栏宽度' : '调整工具栏宽度'}
-      aria-valuenow={Math.round(dimension)} aria-valuemin={edge === 'left' ? minSidebarWidth(viewport, split) : minToolWidth(viewport)}
+      aria-label={edge === 'left' ? botResize ? '调整 Bot 列表宽度' : '调整项目栏宽度' : '调整工具栏宽度'}
+      aria-valuenow={Math.round(dimension)} aria-valuemin={edge === 'left' ? minimum : minToolWidth(viewport)}
+      aria-valuetext={botResize && botCompact ? '头像栏' : undefined}
+      onDoubleClick={botResize ? expandBots : undefined}
       onPointerDown={event => {
-        if (event.button !== 0) return
+        if (event.button !== 0 || drag.current) return
         event.currentTarget.setPointerCapture(event.pointerId)
-        drag.current = { x: event.clientX, start: fitted, saved: panels }
+        drag.current = { x: event.clientX, pointerId: event.pointerId, target: event.currentTarget, field, section, botResize,
+          start: fitted, saved: panels, savedBotWidth: botSidebarWidth }
         setDragging(true)
       }}
       onPointerMove={event => {
-        if (!drag.current) return
+        if (!drag.current || drag.current.pointerId !== event.pointerId) return
         const { x, start, saved } = drag.current
-        const resized = resizePanels(start, viewport, edge, event.clientX - x, contextVisible, split)
+        const resized = resizePanels(start, viewport, edge, event.clientX - x, contextVisible, split, botResize ? botSidebarCompactWidth : undefined)
         drag.current.width = resized[field]
-        setPanels({ ...saved, [field]: resized[field] })
+        if (botResize) setBotSidebarWidth(resized.side)
+        else setPanels({ ...saved, [field]: resized[field] })
       }}
-      onPointerUp={event => {
-        if (!drag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return
-        const { width, start } = drag.current
-        if (width != null && width !== start[field]) api.savePanelWidth(field, width)
-      }}
-      onLostPointerCapture={() => {
-        drag.current = null
-        setDragging(false)
-      }}
+      onPointerUp={event => finishPanelDrag(true, event)}
+      onPointerCancel={event => finishPanelDrag(false, event)}
+      onLostPointerCapture={event => finishPanelDrag(false, event)}
       onKeyDown={event => {
-        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return
+        if (!(botResize ? ['ArrowLeft', 'ArrowRight', 'Home', 'End'] : ['ArrowLeft', 'ArrowRight']).includes(event.key)) return
         event.preventDefault()
-        const resized = resizePanels(fitted, viewport, edge, event.key === 'ArrowRight' ? 16 : -16, contextVisible, split)
-        setPanels({ ...panels, [field]: resized[field] })
+        if (botResize) {
+          const maximum = resizePanels(fitted, viewport, edge, 10000, contextVisible, split, botSidebarCompactWidth).side
+          const width = botSidebarKeyWidth(botSidebarWidth, event.key, expandedBotSidebarWidth(record.navigation?.modules?.bots, panels.side), maximum)
+          commitPanelWidth(field, Math.min(width, Math.max(botSidebarExpandedMinimum, maximum)), true)
+        } else {
+          const resized = resizePanels(fitted, viewport, edge, event.key === 'ArrowRight' ? 16 : -16, contextVisible, split)
+          commitPanelWidth(field, resized[field], false)
+        }
       }} />
   }
 
   function renderContext(target, visible, floating = false) {
-    return <ContextList key={target} section={target} record={record} select={select} newChat={newChat}
+    return <ContextList key={target} section={target} record={record} account={account} select={select} newChat={newChat}
+      compact={target === 'bots' && !floating && botCompact} onExpandBots={expandBots}
       chat={target === section ? chat : record.chats[lastChatInSection(record, target)]}
       selectedItem={target === section ? item : record.navigation?.modules?.[target]?.item}
       visible={visible} onOpenSection={floating ? () => navigate(target) : undefined}
@@ -1128,8 +1214,10 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         refresh()
         return true
       }}
-      onManageBots={id => manage('bot-settings', id)} onChatMenu={(event, id) => openContext(event, 'sidebar', id)}
-      selectItem={selected => manage(target, selected)} />
+      onCreateBot={kind => { setBotCreateRequest({ kind, id: crypto.randomUUID() }); manage('bot-settings') }}
+      onMarkUnread={id => { api.changeChat(id, { unread: !record.chats[id]?.unread }); refresh() }}
+      onManageBots={id => id ? openBotSettings(id) : manage('bot-settings')} onChatMenu={(event, id) => openContext(event, 'sidebar', id)}
+      selectItem={selected => target === 'bot-settings' && selected ? openBotSettings(selected) : manage(target, selected)} />
   }
 
   function openNativeSurface(surface) {
@@ -1221,8 +1309,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         {live && draftChat && !draftChat.gatewayModelPick && gateway.model?.error && <p className="live-connection management-error" role="alert">
           模型暂不可用。{gateway.model.error} <button type="button" className="secondary" onClick={gateway.checkModel}>重新检查</button>
         </p>}
-        {(bot || group) && !full && <BotConversationHeader bot={bot} group={group} chat={chat} members={members}
-          onManage={() => manage('bot-settings', chat.id)} />}
+        {(bot || group) && !full && <BotConversationHeader bot={bot} group={group} chat={chat} members={members} account={account}
+          onManage={() => openBotSettings(bot?.id || chat.id)} />}
         <div className="transcript-region" inert={full}><Transcript key={composerChat.id + ':' + transcriptVersion} chat={composerChat} project={project} bot={bot} group={group} members={members} account={account}
           visible={!full && !replacesChat} onPositionChange={transcriptPosition => {
             if (chat && api.current()?.chats[chat.id] === chat) api.changeChat(chat.id, { transcriptPosition })
@@ -1275,11 +1363,12 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
           <h2>{section === 'bots' ? '选择一个 Bot 或群聊' : '打开一条会话开始工作'}</h2>
           {live && <small role="status">{gateway.status === 'connected' ? connectedLabel : gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</small>}
           {section === 'projects' && <button className="secondary" onClick={() => newChat()}><Icon name="add" />新聊天</button>}
-          {section === 'bots' && <button className="secondary" onClick={() => manage('bot-settings')}>管理 Bot 与群聊</button>}
+          {section === 'bots' && <button className="secondary" onClick={() => manage('bot-settings')}>管理全部 Bot</button>}
         </div>
       </main> : <ModulePage key={section} managed={isManaged} scrollTop={pageState?.mainScrollTop}
         onScrollChange={mainScrollTop => updateMainPage({ mainScrollTop }, false)}>
         {isManaged ? <Management section={section} selected={item} record={record} api={api} live={live} mutateProject={mutateProject}
+          createRequest={botCreateRequest} onConsumeCreate={() => setBotCreateRequest(null)} onManageBot={openBotSettings}
           refresh={refresh} report={report} account={account} onOpenChat={select} onNavigate={navigate} onOpenProfileSection={openProfileSection}
           onOpenTaskSession={live?.native ? descriptor => {
             if (api.current() !== record) return
@@ -1288,7 +1377,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
             })
           } : undefined}
           pageState={pageState} onPageChange={updateMainPage} onGroupOpenChange={setGroupOpen}
-          onSelectItem={selected => manage(section, selected)} />
+          onSelectItem={selected => section === 'bot-settings' && selected ? openBotSettings(selected) : manage(section, selected)} />
           : <Directory section={section} selected={item} record={record} report={report} account={account} live={Boolean(live)} onOpenNativeSurface={live?.native ? openNativeSurface : undefined}
             search={pageState?.mainSearch} onSearchChange={mainSearch => updateMainPage({ mainSearch })} />}
       </ModulePage>}
@@ -1312,6 +1401,19 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
       </aside>}
     </div>
     {NativePet && nativePrimary.current?.pet && <NativePet controller={nativePrimary.current.pet} snapshot={nativePrimary.current.pet.snapshot()} />}
+    {botSettingsId && <BotSettingsDrawer key={botSettingsId} name={settingsBot?.name ?? settingsGroup?.name ?? '已移除'}
+      group={Boolean(settingsGroup)} busy={botSettingsBusy} onClose={closeBotSettings} returnFocus={botSettingsTrigger.current}>
+      <Management section="bot-settings" embedded selected={botSettingsId} record={record} api={api} live={live}
+        account={account} refresh={refresh} report={report} onDirtyChange={setBotSettingsDirty} onBusyChange={setBotSettingsBusy}
+        onOpenChat={id => leaveBotSettings(() => select(id))}
+        onNavigate={target => leaveBotSettings(() => navigate(target))}
+        onOpenProfileSection={(target, profile) => leaveBotSettings(() => openProfileSection(target, profile))}
+        onOpenNativeSettings={(surface, bot) => leaveBotSettings(() => {
+          void live.openNativeSurface(surface, bot.profile).catch(error => {
+            if (api.current() === record) report(error.message, true)
+          })
+        })} />
+    </BotSettingsDrawer>}
     <NativeFileDialog controller={liveFiles.fileActions} />
     <NativeRemoteFolderDialog controller={nativeRemotePicker.current} />
     <NativeUpdateDialog controller={nativePrimary.current?.updates} />

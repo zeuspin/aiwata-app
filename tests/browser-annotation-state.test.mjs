@@ -326,3 +326,41 @@ test('old consumed lifetime counters migrate to a fresh batch and partially deli
   const legacy = { annotations: [first, second], annotationConsumed: [first.id, second.id], annotationNumbers: { [url]: 9 } }
   assert.equal(surfaces.nextBrowserAnnotationNumber(legacy, url), 1)
 })
+
+
+test('assistant streaming during annotation storage does not discard a valid screenshot', async () => {
+  const f = setup(), chat = f.api.getChat('plan'), save = f.store.save
+  f.store.save = async (...args) => {
+    await save(...args)
+    f.api.changeChat(chat.id, { messages: [...chat.messages, { role: 'agent', text: 'Still responding' }],
+      agentRun: { text: 'Streaming update' }, gatewaySeq: 42, activity: { background: true } })
+  }
+  const result = await f.api.saveBrowserAnnotationCapture(chat.id, '浏览器', url, capture)
+  assert.equal(result.ok, true, 'streaming changes neither the browser nor the annotation recipient')
+  assert.equal(browserState(chat).annotationDrafts[url].capture.identity.selector, '#title')
+  assert.equal(chat.agentRun.text, 'Streaming update')
+  assert.equal(f.files.size, 1)
+})
+
+test('assistant streaming during annotation handoff preserves both the live reply and appended draft', async () => {
+  const f = setup(), saved = await pin(f), read = f.store.read, chat = f.api.getChat('plan')
+  f.store.read = async (...args) => {
+    const file = await read(...args)
+    f.api.changeChat(chat.id, { agentRun: { text: 'Continuing reply' }, gatewaySeq: 43 })
+    return file
+  }
+  assert.equal((await f.api.addBrowserAnnotationsToDraft(request(f.api, chat.id, [saved]))).ok, true)
+  assert.match(chat.draft, /调整标题/)
+  assert.equal(chat.agentRun.text, 'Continuing reply')
+})
+
+test('navigating away and back during annotation storage still rejects the stale screenshot', async () => {
+  const f = setup(), save = f.store.save
+  f.store.save = async (...args) => {
+    await save(...args)
+    f.api.updateBrowser('plan', browser => surfaces.navigateBrowser(browser, 'https://example.com/other'))
+    f.api.updateBrowser('plan', browser => surfaces.navigateBrowser(browser, url))
+  }
+  assert.equal((await f.api.saveBrowserAnnotationCapture('plan', '浏览器', url, capture)).ok, false)
+  assert.equal(f.files.size, 0)
+})

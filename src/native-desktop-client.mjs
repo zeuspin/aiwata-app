@@ -124,10 +124,12 @@ export async function createNativeDesktopClient({ host, Gateway, route, ownerPro
       const { profiles = [] } = await rpc('profiles.list', { include_sessions: true })
       return { bots: await Promise.all(profiles.filter(row => row.name !== 'default' || base.profile === 'default').map(async row => {
         const asset = row.has_avatar ? await rpc('profiles.get_asset', { name: row.name, asset: 'avatar' }) : null
-        return { profile: row.name, isDefault: row.name === base.profile, identity: botIdentity(row), name: row.ui_meta?.['hermes-bots']?.title || row.display_name || (row.name === base.profile ? 'AIWATA' : row.name),
+        return { profile: row.name, isDefault: row.name === base.profile, identity: botIdentity(row),
+          profileIdentity: JSON.stringify([base.connectionId, base.profile, row.name, row.path ?? null]), name: row.ui_meta?.['hermes-bots']?.title || row.display_name || (row.name === base.profile ? 'AIWATA' : row.name),
           description: row.description, model: row.model, provider: row.provider,
           appearance: row.ui_meta?.['aiwata-app']?.appearance, avatar: asset?.found ? asset.data : '',
-          canonicalId: row.canonical_session_id ?? row.canonical_session?.id,
+          canonicalId: row.canonical_session?.resolved_id ?? row.canonical_session_id ?? row.canonical_session?.id,
+          canonicalIds: [...new Set([row.canonical_session_id, row.canonical_session?.id, row.canonical_session?.resolved_id].filter(Boolean))],
           revision: row.ui_meta_revisions?.['aiwata-app'] ?? 0, desktopRevision: row.ui_meta_revisions?.['hermes-bots'] ?? 0 }
       })) }
     },

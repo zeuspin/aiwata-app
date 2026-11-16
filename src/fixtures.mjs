@@ -13,6 +13,16 @@ export function createChat(id, title, projectId = null) {
   }
 }
 
+export function ensureDemoPrimaryBot(record) {
+  if (record.bots.some(bot => bot.isDefault)) return
+  let id = 'aiwata-main'
+  let suffix = 1
+  while (record.chats[id] || [...record.bots, ...record.groups].some(item => item.id === id)) id = 'aiwata-main-' + suffix++
+  const bot = { id, profile: 'default', name: 'AIWATA', isDefault: true, description: '你的日常工作助手' }
+  record.bots.push(bot)
+  record.chats[id] = createChat(id, bot.name)
+}
+
 export function seedAccount(id) {
   const isLin = id === 'lin'
   const projects = isLin
@@ -50,10 +60,10 @@ export function seedAccount(id) {
   const bots = isLin
     ? [{ id: 'editor', name: '文案助手', description: '整理内容与发布文案' }, { id: 'designer', name: '设计助手', description: '跟进视觉与素材' }]
     : [{ id: 'researcher', name: '研究助手', description: '整理文档与参考资料' }]
-  const groups = isLin ? [{ id: 'release', name: '发布协作群', description: '文案助手 · 设计助手' }] : []
+  const groups = isLin ? [{ id: 'release', name: '发布协作群', description: '文案助手 · 设计助手', members: bots.map(bot => bot.id) }] : []
   for (const item of [...bots, ...groups]) chats[item.id] = createChat(item.id, item.name)
 
-  return {
+  const record = {
     projects, chats, bots, groups,
     credits: isLin ? 1280 : 0,
     usage: [],
@@ -65,4 +75,6 @@ export function seedAccount(id) {
       : [{ id: 'mail', name: '电子邮件', schedule: '消息触发', enabled: true, runs: 0 }],
     assets: isLin ? ['产品截图清单.md', 'AIWATA 品牌指南.pdf', '发布文案初稿.md'] : ['Atlas 站点地图.md'],
   }
+  ensureDemoPrimaryBot(record)
+  return record
 }

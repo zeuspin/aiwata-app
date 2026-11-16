@@ -33,6 +33,13 @@
   --bot-size: var(--group-face-size);
   border-radius: 50%; background: color-mix(in srgb, var(--bot-base) 22%, var(--surface));
 }
+.group-user-avatar {
+  display: inline-grid; place-items: center; flex: none;
+  inline-size: calc(var(--group-face-size) * .78); block-size: calc(var(--group-face-size) * .78);
+  margin-inline: calc(var(--group-face-size) * .11);
+  border-radius: 50%; background: var(--avatar, #677168); color: #fff;
+  font-size: calc(var(--group-face-size) * .4); font-weight: 600;
+}
 .group-face > :not(:first-child) { margin-inline-start: calc(var(--group-face-size) * -.42); }
 .group-face > :first-child { z-index: 3; }
 .group-face > :nth-child(2) { z-index: 2; }
@@ -63,6 +70,9 @@
   stroke: currentColor;
   stroke-width: 2.6px;
   transition: opacity 180ms ease;
+}
+.bot-avatar[data-bot-avatar-mode="photo"][data-bot-state="thinking"] .bot-avatar-orbit {
+  opacity: .9; stroke-dasharray: 2 5; animation: bot-orbit 3.2s linear infinite;
 }
 .bot-avatar-badge circle { stroke: var(--surface, #fafaf9); stroke-width: 2px; }
 .bot-avatar[data-bot-state="waiting"] .bot-avatar-badge circle { fill: #a66012; }
@@ -222,10 +232,30 @@
   100% { transform: none; }
 }
 
+.bot-avatar[data-bot-still]::before,
+.bot-avatar[data-bot-still] * { animation: none !important; transition: none !important; }
+
 @media (prefers-reduced-motion: reduce) {
   .bot-avatar::before,
   .bot-avatar :is(.bot-avatar-body, .bot-portrait-head, .bot-avatar-eyes, .bot-avatar-orbit, .bot-avatar-idea *, .bot-avatar-idle-mouth, .bot-avatar-idle-effects *) {
     animation: none !important;
     transition: none;
   }
+}
+
+/* Opt-in list motion is separate from conversation state and historical avatars. */
+.bot-avatar[data-bot-interactive]::before { display: none; }
+.bot-avatar[data-bot-interactive] :is(.bot-avatar-body, .bot-portrait-head) {
+  animation: none;
+  transform: rotate(var(--bot-lean, 0deg));
+}
+.bot-avatar[data-bot-interactive] .bot-avatar-eyes {
+  animation: none !important;
+  transform: translate(var(--bot-look-x, 0px), var(--bot-look-y, 0px)) scaleY(var(--bot-blink, 1));
+}
+.bot-avatar[data-bot-interactive][data-bot-state="thinking"] .bot-avatar-orbit {
+  opacity: .8; stroke-dasharray: 2 5; animation: bot-orbit 3.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
+  .bot-avatar[data-bot-interactive] :is(.bot-avatar-body, .bot-portrait-head, .bot-avatar-eyes) { transform: none; }
 }
