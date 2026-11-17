@@ -1,0 +1,6 @@
+.desktop-tip{position:fixed;z-index:1000;display:flex;align-items:flex-start;gap:10px;box-sizing:border-box;width:max-content;max-width:min(280px,calc(100vw - 24px));padding:12px 14px;border:1px solid var(--accent);border-radius:8px;background:var(--surface);color:var(--text);box-shadow:0 4px 18px #0002;font-size:13px;pointer-events:auto}
+.desktop-tip p{margin:0;overflow-wrap:anywhere}.desktop-tip strong{display:block;margin-bottom:4px}.desktop-tip button{flex:none;border:0;background:transparent;color:inherit;font-size:17px;line-height:1;cursor:pointer;padding:0}
+.desktop-tip:after{content:"";position:absolute;width:8px;height:8px;background:var(--surface);border:1px solid var(--accent);transform:rotate(45deg)}
+.desktop-tip[data-side=top]:after{top:calc(100% - 4px);left:calc(50% - 4px);border-top:0;border-left:0}.desktop-tip[data-side=bottom]:after{bottom:calc(100% - 4px);left:calc(50% - 4px);border-bottom:0;border-right:0}
+.desktop-tip[data-side=left]:after{left:calc(100% - 4px);top:calc(50% - 4px);border-bottom:0;border-left:0}.desktop-tip[data-side=right]:after{right:calc(100% - 4px);top:calc(50% - 4px);border-top:0;border-right:0}
+.window [data-tip-target]{outline:2px solid var(--accent);outline-offset:3px}

@@ -1,5 +1,5 @@
 // Generated from AIWATA 6631a6af2c58fc498ef01fa5cc4b222fc8682683:apps/desktop/src/app/chat/right-rail/preview-drive.ts; run node scripts/sync-browser-drive.mjs to update.
-const isMacPlatform = () => process.platform === "darwin";
+const isMacPlatform = () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform || navigator.userAgent || "");
 const GLIDE_STEPS = 3;
 const GLIDE_MS = 36;
 const KEY_MS = 7;

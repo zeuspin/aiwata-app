@@ -128,7 +128,7 @@ async function openWindow() {
     try {
       request = inspections.begin(scope, guest, requestId)
       const currentDocument = () => currentPage() && epoch === navigationEpochs.get(guest)
-      const result = await drivePreviewPage(guest, command, epoch, currentDocument, request.signal)
+      const result = await drivePreviewPage(guest, command, epoch, currentDocument, request.signal, activeGuest)
       if (inspectionResultIsCurrent({ action: command.action, result, active: activeGuest(),
         documentCurrent: currentDocument(), aborted: request.signal.aborted })) return result
     } catch { /* Navigation or release may have destroyed this guest. */ }

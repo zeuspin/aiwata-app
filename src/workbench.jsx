@@ -1,3 +1,5 @@
+import { requestDesktopTip } from './desktop-tip-request.mjs'
+import { DesktopTip } from './desktop-tip.jsx'
 import { createAppTour, tourAction } from './desktop-tour.mjs'
 import { appearanceChange, appearanceStyle } from './desktop-appearance.mjs'
 import { browserState, closeToolInstances, terminalInstanceId, toolChat, toolEditsFor, toolType } from './tool-tabs.mjs'
@@ -155,6 +157,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const settingsBot = record.bots.find(bot => bot.id === botSettingsId)
   const settingsGroup = record.groups.find(group => group.id === botSettingsId)
   const [toast, setToast] = useState(null)
+  const [desktopTip, setDesktopTip] = useState(null)
+  useEffect(() => { setDesktopTip(null) }, [account.id, composerChat?.id])
   const [toolsByChat, setToolsByChat] = useState({})
   const [previewPartition, setPreviewPartition] = useState(null)
   const terminalReadingPositions = useRef(new Map())
@@ -828,6 +832,11 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     if (method === 'preview.read' || method === 'preview.act') return inspectWebPreview(session, method, params, signal)
     if (method === 'theme.apply') return applyDesktopAppearance(params)
     if (method === 'tour') return runDesktopTour(params, signal)
+    if (method === 'tip.show') return requestDesktopTip({ doc: document, payload: params, signal, present: tip => {
+      const owned = { ...tip, chatId: session.id, accountId: account.id }
+      setDesktopTip(owned)
+      return () => setDesktopTip(current => current === owned ? null : current)
+    } })
     if (method === 'window.read') {
       if (!window.aiwataPreview?.readWindowBelow) return { error: '当前宿主不支持原生窗口元数据读取。' }
       return window.aiwataPreview.readWindowBelow()
@@ -850,7 +859,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         if (tool && availableTools.includes(tool)) { setChatFocus(false); api.openTool(session.id, tool); refresh() }
       }
     } else if (type === 'tip.show') {
-      void runDesktopTour({ action: 'show', selector: payload.selector, text: payload.text.slice(0, 500) }).catch(() => report(payload.text.slice(0, 500)))
+      setDesktopTip({ ...payload, text: payload.text.slice(0, 500), chatId: session.id, accountId: account.id })
     }
   }
 
@@ -1447,6 +1456,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
       initialProfile={composerChat?.gatewayProfile} onClose={() => setCapabilityPanel(null)} /></Suspense>}
     {live && capabilityPanel === 'models' && <Suspense fallback={null}><LiveProviderManager live={live} bots={record.bots}
       initialProfile={composerChat?.gatewayProfile} onClose={() => setCapabilityPanel(null)} onChanged={() => gateway.checkModel()} /></Suspense>}
+    {desktopTip?.chatId === chat?.id && desktopTip?.accountId === account.id && <DesktopTip tip={desktopTip} onClose={() => setDesktopTip(null)} />}
     {toast && <div className={'toast ' + (toast.error ? 'toast-error' : '')} role={toast.error ? 'alert' : 'status'}>
       <Icon name={toast.error ? 'coins' : 'check'} />{toast.message}
     </div>}

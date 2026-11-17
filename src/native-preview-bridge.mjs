@@ -56,7 +56,8 @@ export function installNativePreviewBridge(host, partition) {
       const view = viewFor(id, url), controller = new AbortController()
       inspections.set(requestId, controller)
       try { return await drivePreviewPage(facade(view), previewCommand(method, params), url,
-        () => lifecycle.active && view.isConnected && view.getURL() === url, controller.signal) }
+        () => lifecycle.active && view.isConnected && view.getURL() === url, controller.signal,
+        () => lifecycle.active && view.isConnected) }
       finally { inspections.delete(requestId) }
     },
     async cancelInspection(_partition, _id, requestId) { inspections.get(requestId)?.abort() },

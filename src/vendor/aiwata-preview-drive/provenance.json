@@ -40,9 +40,9 @@
       "path": "apps/desktop/src/app/chat/right-rail/preview-drive.ts",
       "sourceSha256": "987b520b609ecfd388ac558f99287bb7b210218660deb7c727582fe883de789a",
       "output": "preview-drive.mjs",
-      "outputSha256": "f8127fbbe1a75aa028173988090bb050e0b039cc992adedc2c914976caa0eed1",
+      "outputSha256": "5d1cbd5205cc52edf0e31676b812fbf6bebd7e72f16525fa1d145dd3d25ad970",
       "adaptations": [
-        "Resolve platform in native host; scope pointer state to input handle with WeakMap instead of module-global pointer."
+        "Preserve renderer navigator platform detection without a Node process global; scope pointer state to input handle with WeakMap instead of module-global pointer."
       ]
     },
     {

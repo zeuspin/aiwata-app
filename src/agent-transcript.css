@@ -107,3 +107,5 @@
   .conversation-avatar .bot-avatar { --bot-size: 30px; }
   .conversation-typing { gap: 9px; }
 }
+
+.message-reactions{display:flex;gap:4px;margin-top:6px}.message-reactions>span{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:2px 7px;font-size:14px;line-height:1.3}

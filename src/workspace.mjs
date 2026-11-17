@@ -108,10 +108,11 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
   let online = true
   let loginVersion = 0
   const chatVersions = new WeakMap()
+  const inventoryRevisions = new WeakMap()
 
   function persist() {
     try {
-      const saveChat = ({ connectionRequest, desktopEffect, ...chat }) => chat
+      const saveChat = ({ connectionRequest, desktopEffect, gatewayReactions, gatewayCwd, ...chat }) => chat
       const saved = live ? Object.fromEntries(Object.entries(records).map(([id, record]) => [id, {
         ...record, bots: record.bots.map(({ avatar, ...bot }) => bot),
         chats: Object.fromEntries(Object.entries(record.chats).map(([id, chat]) => [id, saveChat(chat)])),
@@ -522,6 +523,9 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
     const unknown = snapshot.pending?.find(item => item.status === 'unknown')
     const pending = snapshot.running || Boolean(snapshot.pending?.length || request)
     const transcript = gatewayTranscript(snapshot, { pending, files: !chat.gatewayRoom })
+    const sameSessionOwner = !chat.gatewayStoredId || chat.gatewayStoredId === (snapshot.stored_session_id ?? snapshot.session_id)
+    if (sameSessionOwner && chat.gatewayReactions) transcript.messages = transcript.messages.map(message =>
+      Object.hasOwn(chat.gatewayReactions, message.id) ? { ...message, reactions: chat.gatewayReactions[message.id] } : message)
     const promptDisplays = new Map((chat.gatewayPromptDisplays ?? []).map(item => [item.wireText, item.text]))
     transcript.messages = transcript.messages.map(message => message.role === 'user' && promptDisplays.has(message.text)
       ? { ...message, text: promptDisplays.get(message.text) } : message)
@@ -530,15 +534,20 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
     if (run && transcript.pendingFiles.length) run.filePreviews = transcript.pendingFiles.reduce(addFilePreview, run.filePreviews)
     if (run && transcript.pendingPages.length) run.webPreviews = transcript.pendingPages.reduce(addWebPreview, run.webPreviews)
     const projectId = chat.gatewayProfile ? null : info.cwd === undefined ? chat.projectId : projectForDirectory(current().projects, info.cwd)
+    if (!sameSessionOwner || typeof info.cwd === 'string' && info.cwd !== chat.gatewayCwd) {
+      inventoryRevisions.set(current(), (inventoryRevisions.get(current()) ?? 0) + 1)
+    }
     const agentActions = chat.gatewayRoom ? [] : gatewayBrowserActions(snapshot.messages ?? [])
     return changeChat(id, {
       ...extra, gatewayId: snapshot.session_id, gatewayStoredId: snapshot.stored_session_id ?? snapshot.session_id,
+      ...(typeof info.cwd === 'string' ? { gatewayCwd: info.cwd } : !sameSessionOwner ? { gatewayCwd: undefined } : {}),
       ...(Object.hasOwn(snapshot, 'pending_connection') ? { connectionRequest: mergeConnectionRequest(null, snapshot.pending_connection, { replace: true }) } : {}),
       gatewayEpoch: snapshot.replay_epoch, gatewayGeneration: snapshot.execution_generation,
       gatewaySeq: pending && chat.pending && chat.gatewayEpoch === snapshot.replay_epoch
         ? (chat.gatewaySeq ?? 0) : (snapshot.last_sequence ?? 0),
       source: 'own', model: info.model ?? chat.model,
       projectId, title: chat.gatewayProfile ? chat.title : info.title || chat.title,
+      ...(!sameSessionOwner ? { gatewayReactions: {} } : {}),
       messages: transcript.messages, pending: pending ? (chat.pending ?? snapshot.pending?.[0]?.admission_id ?? snapshot.session_id) : null,
       gatewayUnknown: unknown ? { admissionId: unknown.admission_id, generation: unknown.execution_generation } : null,
       agentRun: run, activity: { ...chat.activity, needsInput: Boolean(request || unknown) },
@@ -625,17 +634,21 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
         Object.assign(chat, { title: bot.name, gatewayProfile: bot.profile, source: 'own', projectId: null,
           ...(bot.canonicalId && (!sameCanonical || !chat.gatewayStoredId) ? { gatewayStoredId: bot.canonicalId } : {}),
           ...(changed ? { gatewayId: null, gatewaySeq: 0, pending: null, gatewayUnknown: null,
-            gatewayAdmission: null, gatewaySubmission: null, agentRun: null, messages: [] } : {}),
+            gatewayAdmission: null, gatewaySubmission: null, agentRun: null, messages: [], gatewayReactions: {} } : {}),
         })
       }
       return persist()
     },
+    gatewayInventoryRevision: () => inventoryRevisions.get(current()) ?? 0,
     syncGatewayInventory(projects, sessions = [], { complete = false } = {}) {
       const record = current()
       if (!live || !record) return false
       record.projects = projects.map(gatewayProject).filter(project => !project.archived)
       const projectIds = new Set(record.projects.map(project => project.id))
-      for (const chat of Object.values(record.chats)) if (!projectIds.has(chat.projectId)) chat.projectId = null
+      for (const chat of Object.values(record.chats)) {
+        if (!chat.gatewayProfile && !chat.gatewayRoom && typeof chat.gatewayCwd === 'string') chat.projectId = projectForDirectory(record.projects, chat.gatewayCwd)
+        else if (!projectIds.has(chat.projectId)) chat.projectId = null
+      }
       const byGatewayId = new Map(Object.values(record.chats).filter(chat => !chat.gatewayProfile && !chat.gatewayRoom).map(chat => [chat.gatewayStoredId, chat]))
       const listed = new Set()
       const captureStoredIds = new Set(Object.values(record.gatewayCaptureDrafts ?? {}).map(chat => chat.gatewayStoredId).filter(Boolean))
@@ -647,7 +660,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
         const chat = byGatewayId.get(id) ?? (record.chats[id] ??= createChat(id, item.title || '新聊天'))
         Object.assign(chat, { gatewayStoredId: id, title: item.title || chat.title, model: item.model ?? chat.model,
           gatewayUpdatedAt: item.updated_at ?? item.created_at ?? chat.gatewayUpdatedAt,
-          ...(item.cwd === undefined ? {} : { projectId: projectForDirectory(record.projects, item.cwd) }),
+          ...(item.cwd === undefined ? {} : { gatewayCwd: item.cwd, projectId: projectForDirectory(record.projects, item.cwd) }),
           source: 'own', ...(item.archived === undefined ? {} : { archived: item.archived }) })
         if (chat.archived && record.openChats.includes(chat.id)) closeChats(chat.id, 'one')
       }
@@ -656,6 +669,7 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
           if (id && !chat.pending && !listed.has(id)) deleteChat(chat.id)
         }
       }
+      inventoryRevisions.set(record, (inventoryRevisions.get(record) ?? 0) + 1)
       return persist()
     },
     acceptGatewayPrompt(id, input, receipt) {
@@ -697,6 +711,11 @@ export function createWorkspace(storage, attachmentStore, { live = false, accoun
       if (generation != null && (chat.gatewayGeneration == null || generation >= chat.gatewayGeneration)) cursor.gatewayGeneration = generation
       if (event.type === 'session.title') return changeChat(id, { ...cursor, title: chat.gatewayProfile ? chat.title : event.payload?.title || chat.title })
       if (generation != null && chat.gatewayGeneration != null && generation < chat.gatewayGeneration) return false
+      if (event.type === 'session.info' && typeof event.payload?.cwd === 'string') {
+        if (chat.gatewayCwd !== event.payload.cwd) inventoryRevisions.set(current(), (inventoryRevisions.get(current()) ?? 0) + 1)
+        return changeChat(id, { ...cursor, gatewayCwd: event.payload.cwd,
+          ...(!chat.gatewayProfile && !chat.gatewayRoom ? { projectId: projectForDirectory(current().projects, event.payload.cwd) } : {}) })
+      }
       const desktopPatch = desktopEventPatch(chat, event.type, event.payload, viewed)
       if (desktopPatch && !chat.gatewayRoom) return changeChat(id, { ...cursor, ...desktopPatch })
       if (!chat.pending) return false

@@ -1,8 +1,26 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
+import { spawnSync } from 'node:child_process'
 import { previewCommand } from '../src/web-preview.mjs'
 import { inspectPreviewPage, drivePreviewPage } from '../scripts/desktop-preview-inspection.mjs'
+
+test('native text replacement uses the renderer platform without a Node process global', () => {
+  const driver = new URL('../src/vendor/aiwata-preview-drive/preview-drive.mjs', import.meta.url).href
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    const { selectAll } = await import(${JSON.stringify(driver)});
+    const events = [], hostProcess = process;
+    globalThis.process = undefined;
+    try { await selectAll({send: event => events.push(event)}) }
+    finally { globalThis.process = hostProcess }
+    assert.deepEqual(events, [
+      {keyCode:'a',modifiers:[hostProcess.platform==='darwin'?'meta':'control'],type:'keyDown'},
+      {keyCode:'a',modifiers:[hostProcess.platform==='darwin'?'meta':'control'],type:'keyUp'},
+    ]);
+  `], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+})
 
 // Real injected programs run in an isolated VM; this fixture supplies only the
 // browser layout APIs that Node lacks. It does not implement ref or delta logic.
@@ -122,6 +140,26 @@ test('losing page ownership during pointer travel stops before mouse activation'
   const result = await drivePreviewPage(fixture.guest, { action: 'click', ref: first.elements[0].ref }, 1, () => owned)
   assert.equal(result.success, false)
   assert.equal(fixture.inputs.some(event => event.type === 'mouseDown'), false)
+})
+
+for (const stage of ['pointerdown', 'pointerup']) for (const ownerActive of [true, false]) test(`navigation after ${stage} preserves owner availability: ${ownerActive}`, async () => {
+  const fixture = pageFixture()
+  const first = await drivePreviewPage(fixture.guest, { action: 'elements' }, 1, () => true)
+  let documentCurrent = true, callsAtNavigation
+  const send = fixture.guest.sendInputEvent.bind(fixture.guest)
+  fixture.guest.sendInputEvent = event => {
+    send(event)
+    if (event.type === (stage === 'pointerdown' ? 'mouseDown' : 'mouseUp')) {
+      documentCurrent = false
+      callsAtNavigation = fixture.guest.calls
+    }
+  }
+  const result = await drivePreviewPage(fixture.guest, { action: 'click', ref: first.elements[0].ref },
+    1, () => documentCurrent, undefined, () => ownerActive)
+  assert.equal(result.success, ownerActive)
+  assert.equal(result.navigated, ownerActive ? true : undefined)
+  assert.equal(fixture.guest.calls, callsAtNavigation)
+  assert.equal(fixture.inputs.at(-1).type, stage === 'pointerdown' ? 'mouseDown' : 'mouseUp')
 })
 
 test('a withdrawn request stops waiting for a guest that no longer answers', async () => {

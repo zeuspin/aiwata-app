@@ -230,3 +230,20 @@ test('interactive appearance commits only for a live request and before its nati
   f.select('other-chat')
   await f.dispatcher.respond(stale, { answer: { layout: 'sidebar-left' } }, () => assert.fail('stale request cannot repaint'))
 })
+
+
+test('tip rendering is an automatic request whose actual failure remains a structured UI answer', async () => {
+  const f = fixture(async () => ({success:false,error:'No visible target'}))
+  f.dispatcher.handle(f.frame('tip-confirm', 'tip.show', {selector:'#missing',text:'Type here'}))
+  await flush()
+  assert.equal(f.replies[0]?.error, undefined)
+  assert.equal(JSON.parse(f.replies[0]?.result?.value ?? '{}').success, false)
+})
+
+test('a tour handler refusal answers with UI failure instead of poisoning bridge support', async () => {
+  const f = fixture(async () => { throw new Error('view changed') })
+  f.dispatcher.handle(f.frame('tour-refused', 'tour', {action:'targets'}))
+  await flush()
+  assert.equal(f.replies[0]?.error, undefined)
+  assert.equal(JSON.parse(f.replies[0]?.result?.value ?? '{}').success, false)
+})

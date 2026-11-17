@@ -31,14 +31,14 @@ for (const name of modules) {
     adaptations.push('Export native actWithChannels; remove upstream store/host entry point and HMR; pass input to per-guest pointer lookup.')
   }
   if (name === 'preview-drive') {
-    source = source.replace("import { isMacPlatform } from '@/lib/platform'", "const isMacPlatform = () => process.platform === 'darwin'")
+    source = source.replace("import { isMacPlatform } from '@/lib/platform'", "const isMacPlatform = () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '')")
     source = source.replace('let pointer: DrivePoint = { x: 0, y: 0 }\nlet placed = false',
       'const pointers = new WeakMap<object, { point: DrivePoint; placed: boolean }>()\nconst pointerKey = (input: object) => (input as { pointerKey?: object }).pointerKey ?? input\nconst pointerFor = (input: object) => pointers.get(pointerKey(input)) ?? { point: { x: 0, y: 0 }, placed: false }')
     source = source.replace('export function pointerPlaced(): boolean {\n  return placed', 'export function pointerPlaced(input: object): boolean {\n  return pointerFor(input).placed')
     source = source.replace('const from = pointer', 'const from = pointerFor(input).point')
     source = source.replace('pointer = to\n  placed = true', 'pointers.set(pointerKey(input), { point: to, placed: true })')
     source = source.replace(/(export async function (?:clickAt|wheelBy)\([^\n]+\): Promise<void> \{)/g, '$1\n  const pointer = pointerFor(input).point')
-    adaptations.push('Resolve platform in native host; scope pointer state to input handle with WeakMap instead of module-global pointer.')
+    adaptations.push('Preserve renderer navigator platform detection without a Node process global; scope pointer state to input handle with WeakMap instead of module-global pointer.')
   }
   source = source.replaceAll("'@/lib/preview-act/act-in-page'", "'./act-in-page'").replaceAll("'@/lib/preview-act/watch-in-page'", "'./watch-in-page'")
   const { code } = await transform(source, { loader: 'ts', format: 'esm', target: 'es2022', legalComments: 'inline' })

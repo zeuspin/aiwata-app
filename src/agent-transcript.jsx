@@ -141,6 +141,9 @@ function Message({ message, index, bot, members, account, conversational, showAv
       <p role="alert">{message.error || '本轮执行失败'}</p>
       {canRetry && message.recoverable && <button type="button" className="secondary" onClick={onRetry}>{onReply ? '重试本轮' : '取回重试内容'}</button>}
     </div>}
+    {!!message.reactions?.length && <div className="message-reactions" role="group" aria-label="消息表情">
+      {message.reactions.map((reaction, position) => <span key={position} title={reaction.author === 'agent' ? 'Agent 表情' : '消息表情'}>{reaction.emoji}</span>)}
+    </div>}
     {message.usage && <small className="agent-usage">{message.usage.input ?? message.usage.input_tokens ?? 0} 输入 · {message.usage.output ?? message.usage.output_tokens ?? 0} 输出 tokens</small>}
     {!conversational && reply}
     </div>

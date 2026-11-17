@@ -1,3 +1,4 @@
+import { createProjectInventorySync } from './project-inventory-sync.mjs'
 import { useEffect, useRef, useState } from 'react'
 import { createBotInventorySync, ensureBotManagementSkill } from './bot-inventory-sync.mjs'
 import { submitLivePrompt } from './submit-live-prompt.mjs'
@@ -22,6 +23,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
   const connection = useRef(live)
   connection.current = live
   const syncBots = useRef(null)
+  const syncProjects = useRef(null)
   const currentChat = useRef(chatId)
   const reportError = useRef(report)
   const afterAcceptance = useRef(onAccepted)
@@ -50,11 +52,14 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
   }
 
   function apply(id, frame, notifyDesktop = true) {
+    const previousCwd = api.getChat(id)?.gatewayCwd
     if (!active() || !api.applyGatewayFrame(id, frame, currentChat.current === id)) return false
     refresh()
     const event = frame.params
-    if (event?.type === 'message.complete') void syncBots.current?.()
     const session = api.getChat(id)
+    if (event?.type === 'message.complete') void syncBots.current?.()
+    if ((event?.type === 'message.complete' || event?.type === 'session.info' && session?.gatewayCwd !== previousCwd) &&
+        profileKey(session?.gatewayProfile) === '' && !session?.gatewayRoom) void syncProjects.current?.()
     if (notifyDesktop && active() && currentChat.current === id && session &&
         profileKey(session.gatewayProfile) === profileKey(frame.profile) &&
         (event?.execution_generation == null || event.execution_generation === session.gatewayGeneration) &&
@@ -140,6 +145,8 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
     const inventoryActive = () => currentInventory && active()
     const refreshInventory = createBotInventorySync({ live, api, active: inventoryActive, refresh, report: (...args) => reportError.current(...args) })
     syncBots.current = refreshInventory
+    const refreshProjects = createProjectInventorySync({ live, api, active: inventoryActive, refresh, report: (...args) => reportError.current(...args) })
+    syncProjects.current = refreshProjects
     void ensureBotManagementSkill(live, inventoryActive).catch(error => {
       if (inventoryActive()) reportError.current('主 Bot 创建技能未就绪：' + error.message, true)
     })
@@ -188,6 +195,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
       if (next !== 'connected') dispatcher.disconnect()
       if (next === 'connected') {
         void refreshInventory()
+        void refreshProjects()
         void checkModel()
         const { chats, newChatDraft, gatewayCaptureDrafts = {} } = api.current()
         const ids = new Set([currentChat.current, newChatDraft?.gatewaySubmission ? newChatDraft.id : null,
@@ -201,6 +209,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
       currentInventory = false
       watching.current = false
       if (syncBots.current === refreshInventory) syncBots.current = null
+      if (syncProjects.current === refreshProjects) syncProjects.current = null
       stopWatching()
     }
   }, [live, api, accountId, refresh])
@@ -347,7 +356,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
         execution_generation: request.params.execution_generation ?? chat.gatewayGeneration }
       if (request.method === 'approval') {
         await call(chat, 'approval.respond', { ...control, choice: value })
-      } else if (request.wireId && request.params.questions.length > 1) {
+      } else if (request.wireId) {
         await live.reply(request.wireId, value, chat.gatewayProfile)
       } else {
         await call(chat, 'clarify.respond', { ...control, answer: Object.values(value.answers ?? {})[0] ?? '' })

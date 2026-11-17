@@ -1,4 +1,4 @@
-const automatic = new Set(['preview.read', 'preview.act', 'terminal.read', 'window.read', 'theme.apply', 'tour'])
+const automatic = new Set(['preview.read', 'preview.act', 'terminal.read', 'window.read', 'theme.apply', 'tour', 'tip.show'])
 const interactive = new Set(['theme.pick', 'setup_beat'])
 const parked = kind => ['secure', 'interactive', 'legacy'].includes(kind)
 const secure = new Set(['sudo', 'secret', 'vault.code', 'vault.unlock_prompt', 'vault.save_login', 'display.install.sudo'])
@@ -133,7 +133,10 @@ export function createDesktopRequestDispatcher({ active, currentChatId, resolveS
         if (typeof value !== 'string' || new TextEncoder().encode(JSON.stringify({ value })).byteLength > 1024 * 1024) throw new Error('Invalid native result')
         complete(record, { value })
       } catch {
-        if (valid(record) && record.state === 'running') complete(record, undefined, errorOf(-32603, 'The desktop capability could not complete this request.'))
+        if (valid(record) && record.state === 'running') {
+          if (['tour', 'tip.show'].includes(method)) complete(record, { value: JSON.stringify({ success: false, error: 'The current desktop view could not complete this UI request. Keep this chat visible and retry.' }) })
+          else complete(record, undefined, errorOf(-32603, 'The desktop capability could not complete this request.'))
+        }
       }
     })()
     return true

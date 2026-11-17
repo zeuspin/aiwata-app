@@ -35,8 +35,9 @@ export async function createNativeDesktopClient({ host, Gateway, route, ownerPro
     entry.gateway.onEvent(event => emit({ method: 'event', params: event, profile: dialectProfile }))
     entry.gateway.onRequest(request => {
       if(stopped)return
-      const owner = ownerProfile(request) || name
-      pendingRequests.set(request.id, { request, profile: frameProfile(owner), session: request.params?.session_id })
+      const canonicalOwner = ownerProfile(request)
+      const owner = canonicalOwner || name
+      pendingRequests.set(request.id, { request, canonical: canonicalOwner !== undefined, profile: frameProfile(owner), session: request.params?.session_id })
       emit({ id: request.id, method: request.method, params: request.params, profile: frameProfile(owner) })
     })
     const dial = async () => {
@@ -89,7 +90,16 @@ export async function createNativeDesktopClient({ host, Gateway, route, ownerPro
     const owned = pendingRequests.get(id)
     if (!owned || owned.profile !== frameProfile(profileName(profile)) || session && owned.session !== session) throw new Error('桌面请求对象或归属已变化。')
     if (error) owned.request.fail(error.code, error.message)
-    else owned.request.respond(result)
+    else {
+      if (owned.canonical && owned.request.method === 'clarify') {
+        // Canonical prompt callbacks consume one flat answer; direct server
+        // cards consume the entire {answers, outcome} form, even for one item.
+        const answer = result?.answers?.[owned.request.params?.questions?.[0]?.qid]
+        result = { answer: typeof result?.answer === 'string' ? result.answer
+          : Array.isArray(answer) ? JSON.stringify(answer) : typeof answer === 'string' ? answer : '' }
+      }
+      owned.request.respond(result)
+    }
     pendingRequests.delete(id)
     return { ok: true }
   }

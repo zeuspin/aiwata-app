@@ -1,3 +1,5 @@
+import { BrowserViewportControls, BrowserViewportFrame } from './browser-viewport.jsx'
+import { browserViewport, updateBrowserViewport, scaleViewportRect } from './browser-viewport.mjs'
 import { BrowserHome } from './browser-home.jsx'
 import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AnnotationControls, NativeAnnotationCard, browserAnnotations } from './browser-annotations.jsx'
@@ -19,10 +21,12 @@ function addressInput(input) {
   return webPreviewAddress(value) ?? ((local || bareDomain) ? webPreviewAddress((local ? 'http://' : 'https://') + value) : null)
 }
 
-function Page({ url, partition, onNavigate, onMetadata, onStatus, chatId, toolInstanceId, previewPage, annotation, annotating, onBusy, onReady, onAnnotationError, consoleStore, consolePanel, onDevTools, controls, voiceService, profile, report }) {
+function Page({ viewport, url, partition, onNavigate, onMetadata, onStatus, chatId, toolInstanceId, previewPage, annotation, annotating, onBusy, onReady, onAnnotationError, consoleStore, consolePanel, onDevTools, controls, voiceService, profile, report }) {
   const element = useRef(null)
   const frame = useRef(null)
   const [pane, setPane] = useState({ width: 360, height: 360 })
+  const [geometry, setGeometry] = useState({left:0,top:0,scale:1})
+  function viewportGeometry(next) {setGeometry(previous => previous.left === next.left && previous.top === next.top && previous.scale === next.scale ? previous : next)}
   const [draftRect, setDraftRect] = useState(null)
   const [pageReady, setPageReady] = useState(false)
   const initial = useRef(url)
@@ -184,10 +188,12 @@ function Page({ url, partition, onNavigate, onMetadata, onStatus, chatId, toolIn
   }, [nativeSession, chromeKey, capture, capturing])
 
   return <div className="live-browser-frame" ref={frame}>
+    <BrowserViewportFrame settings={viewport} onGeometry={viewportGeometry}>
     <webview className="live-browser-page" ref={element} partition={partition}
       src={initial.current} aria-label="真实网页预览" />
+    </BrowserViewportFrame>
     {annotating && capture && !capturing && <NativeAnnotationCard
-      {...placeAnnotateCard({ paneWidth: pane.width, paneHeight: pane.height, rect: draftRect ?? capture.rect })}
+      {...placeAnnotateCard({ paneWidth: pane.width, paneHeight: pane.height, rect: scaleViewportRect(draftRect ?? capture.rect, geometry) })}
       number={capture.number ?? annotation.nextNumber} note={annotation.draft.text}
       onChange={text => annotation.edit({ text })} onSave={event => annotation.save(event, true)}
       onCancel={() => annotation.edit({ capture: null, target: '', text: '' })}
@@ -203,6 +209,7 @@ export function LiveBrowser({ chat, api, refresh, partition, visible, thumbnail,
   const ownerAccountId = api.accountId
   const ownerRecord = api.current()
   const data = chat.browser ?? emptyBrowserState
+  const viewport = browserViewport(data.viewport)
   const url = partition ? webPreviewAddress(data.visited) : null
   const consoleStore = browserConsole(api, partition, chat.id, chat.toolInstanceId ?? '浏览器')
   const consoleState = useSyncExternalStore(consoleStore.subscribe, consoleStore.snapshot, consoleStore.snapshot)
@@ -271,6 +278,8 @@ export function LiveBrowser({ chat, api, refresh, partition, visible, thumbnail,
       <IconButton icon="refresh" label="刷新网页" disabled={!url} onClick={refreshPage} />
       <input disabled={!partition} aria-label="浏览器地址" value={address} onChange={event => setAddressDraft({ page: url, text: event.target.value })} placeholder={partition ? '输入网址' : '网页预览需要桌面宿主'} />
       <IconButton icon="home" label="浏览器起始页" disabled={!url} onClick={() => navigate('')} />
+      <IconButton icon="devices" className="browser-viewport-toggle" label="响应式预览" aria-pressed={viewport.enabled}
+        onClick={() => update(previous => updateBrowserViewport(previous, {enabled:!viewport.enabled}))} />
       <IconButton icon="annotate" className="browser-annotate-toggle" label={annotations.draft.open ? '停止标注' : '标注'}
         aria-pressed={annotations.draft.open} disabled={!url} onClick={() => {
           setAnnotationError('')
@@ -281,11 +290,12 @@ export function LiveBrowser({ chat, api, refresh, partition, visible, thumbnail,
       <IconButton icon="bug" label={devToolsOpen ? '关闭开发者工具' : '打开开发者工具'}
         aria-pressed={devToolsOpen} disabled={!url || !partition || !window.aiwataPreview?.devTools} onClick={toggleDevTools} />
     </form>
+    {viewport.enabled && <BrowserViewportControls settings={viewport} onChange={patch => update(previous => updateBrowserViewport(previous, patch))} />}
     {annotationError && <p className="live-browser-status" role="alert">{annotationError}</p>}
     {visible && url ? <>
       {status.error && <p className="live-browser-status" role="alert">{status.error}</p>}
       {status.loading && <p className="live-browser-status" role="status">正在加载网页…</p>}
-      <Page key={version} url={url} partition={partition} onNavigate={next => {
+      <Page key={version} viewport={viewport} url={url} partition={partition} onNavigate={next => {
         update(previous => navigateBrowser(previous, next))
       }} onMetadata={(page, fields) => {
         if (api.accountId === ownerAccountId && api.current() === ownerRecord) update(previous => updateBrowserPageMetadata(previous, page, fields))
@@ -298,10 +308,10 @@ export function LiveBrowser({ chat, api, refresh, partition, visible, thumbnail,
           onHidden: () => setMarksHidden(value => !value), onClear: annotations.clear, onSend: annotations.send,
           onClose: () => annotations.edit({ open: false }), destination: annotations.destination, busy: annotations.busy }}
         annotating={annotating} onBusy={setCapturing} onReady={setAnnotationReady} onAnnotationError={setAnnotationError} />
-    </> : visible && (availableTools.length === 1 ? <div className="browser-annotation-empty">
+    </> : visible && <div className="browser-viewport-home"><BrowserViewportFrame settings={viewport}>{(availableTools.length === 1 ? <div className="browser-annotation-empty">
       <Icon name="browser" size={32} /><h3>打开网页，直观描述修改</h3>
       <p>在地址栏输入网址，点击标注后可选择元素或框选区域，将截图和修改意见添加到当前{annotations.destination?.kind === 'group' ? '群聊' : 'Bot'}的草稿。</p>
       {!partition && <small>网页载入和截图需要桌面宿主。</small>}
-    </div> : <BrowserHome openTool={openTool} availableTools={availableTools} />)}
+    </div> : <BrowserHome openTool={openTool} availableTools={availableTools} />)}</BrowserViewportFrame></div>}
   </section>
 }

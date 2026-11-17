@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import {
   IconAlertCircle, IconArchive, IconArrowBackUp, IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconArrowsMaximize,
   IconArrowsMinimize, IconBell, IconBook2, IconBrandWechat, IconBrowser, IconBug, IconChevronDown, IconCopy,
-  IconChevronRight, IconCircleCheck, IconClock, IconClockFilled, IconFoldersFilled, IconCoins, IconDeviceLaptop,
+  IconChevronRight, IconCircleCheck, IconClock, IconClockFilled, IconFoldersFilled, IconCoins, IconDeviceLaptop, IconDevices2, IconRotateClockwise,
   IconDots, IconDownload, IconFileText, IconFolder, IconFolderOpen, IconFolderPlus, IconFolders, IconGitBranch, IconHome,
   IconLayoutDashboard, IconLayoutSidebar, IconLayoutSidebarRight, IconLink,
   IconLogout, IconMail, IconMessageCircle, IconMicrophone, IconMovie, IconPaperclip, IconPencil,
@@ -66,6 +66,7 @@ function AiwataIcon({ size, selected = true }) {
 }
 
 const icons = {
+  devices: IconDevices2, rotate: IconRotateClockwise,
   terminal: IconTerminal2, bug: IconBug, copy: IconCopy, git: IconGitBranch, reply: IconArrowBackUp, down: IconArrowDown, back: IconArrowLeft, next: IconArrowRight, send: IconArrowUp,
   full: IconArrowsMaximize, split: IconArrowsMinimize, bell: IconBell, book: IconBook2,
   wechat: IconBrandWechat, browser: IconBrowser, chevron: IconChevronDown,

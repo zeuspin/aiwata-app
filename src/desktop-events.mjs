@@ -1,3 +1,4 @@
+import { messageReactionPatch } from './message-reactions.mjs'
 import { browserState, toolType } from './tool-tabs.mjs'
 import { webPreviewAddress } from './web-preview.mjs'
 import { mergeConnectionRequest } from './connection-request.mjs'
@@ -28,9 +29,6 @@ export function desktopEventPatch(chat, type, payload = {}, viewed) {
     const next = mergeConnectionRequest(chat.connectionRequest, payload, { replace: type === 'connection.request' })
     return next && next !== chat.connectionRequest ? { connectionRequest: next } : null
   }
-  if (type === 'message.reaction' && Number.isSafeInteger(payload.row_id) && Array.isArray(payload.reactions)) {
-    return { messages: chat.messages.map(message => String(message.id) === String(payload.row_id)
-      ? { ...message, reactions: payload.reactions } : message) }
-  }
+  if (type === 'message.reaction') return messageReactionPatch(chat, payload)
   return null
 }

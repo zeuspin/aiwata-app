@@ -1,3 +1,4 @@
+import { messageReactions } from './message-reactions.mjs'
 import { projectMarker } from './conversation-meta.mjs'
 import { addFilePreview, artifactReference } from './file-previews.mjs'
 import { addWebPreview, webPreviewReference } from './web-preview.mjs'
@@ -245,6 +246,7 @@ export function gatewayTranscript(snapshot, { pending = snapshot.running, files 
     if (!authored.text && !authored.attachments?.length) continue
     messages.push({ role: message.role === 'user' ? 'user' : 'agent', ...authored,
       ...(message.row_id != null ? { id: String(message.row_id) } : {}),
+      reactions: messageReactions(message.display_metadata),
       ...links() })
     previews = []
     pages = []

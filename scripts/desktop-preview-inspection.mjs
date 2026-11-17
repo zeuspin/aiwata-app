@@ -50,7 +50,7 @@ export function inspectPreviewPage(guest, command, epoch = 0) {
   return execute(guest, `(${actEngineSource()})(document, window.__hermesActHolder, ${JSON.stringify({ ...fields, kind: action })})`, epoch)
 }
 
-export async function drivePreviewPage(guest, command, epoch, isCurrent, signal) {
+export async function drivePreviewPage(guest, command, epoch, isCurrent, signal, isActive = isCurrent) {
   const valid = () => !signal?.aborted && isCurrent()
   if (!valid()) return expired()
   const guard = () => { if (!valid()) throw new Error('网页、会话或操作请求已切换。') }
@@ -74,6 +74,7 @@ export async function drivePreviewPage(guest, command, epoch, isCurrent, signal)
         const scaled = 'x' in event && Number.isFinite(zoom) && zoom > 0
           ? { ...event, x: Math.round(event.x * zoom), y: Math.round(event.y * zoom) } : event
         guest.sendInputEvent(scaled)
+        if (['mouseDown', 'keyDown', 'char'].includes(event.type)) this.current.delivered = true
       },
       focus() { this.current.guard(); guest.focus() },
     }
@@ -83,6 +84,10 @@ export async function drivePreviewPage(guest, command, epoch, isCurrent, signal)
   // captured in its channel, so a stale action can never acquire newer consent.
   const channel = Object.create(input)
   channel.current = { guard }
+  const inputNavigation = () => !signal?.aborted && isActive() && !isCurrent() && channel.current.delivered &&
+    ['click', 'type', 'press'].includes(command.action)
+    ? { success: true, navigated: true,
+      note: 'Input was delivered before the page changed. Call elements to inspect the new page.' } : null
   const run = async (code, tripSignal) => {
     guard()
     const combined = signal && tripSignal ? AbortSignal.any([signal, tripSignal]) : signal ?? tripSignal
@@ -100,11 +105,11 @@ export async function drivePreviewPage(guest, command, epoch, isCurrent, signal)
   try {
     const { action, ...fields } = command
     const result = await actWithChannels({ ...fields, kind: action }, run, channel, signal)
-    if (signal?.aborted) return expired()
+    if (signal?.aborted || !isActive()) return expired()
     // A successful native action may itself navigate. Preserve that outcome;
     // the host still owns the final epoch/account checks before responding.
-    return valid() || result.success ? result : expired()
+    return inputNavigation() ?? (valid() || result.success ? result : expired())
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+    return inputNavigation() ?? { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 }

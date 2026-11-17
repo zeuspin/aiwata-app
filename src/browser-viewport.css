@@ -1,0 +1,20 @@
+.browser-bar .browser-viewport-toggle[aria-pressed="true"] { background: #e5e8eb; color: var(--text); }
+.browser-viewport-controls { display:flex; flex-wrap:wrap; flex:none; align-items:center; justify-content:center; gap:6px 10px; padding:7px 10px; border-bottom:1px solid var(--line); background:var(--tool-surface); font-size:12px; }
+.browser-viewport-controls select { max-width:100%; min-width:0; height:27px; border:1px solid var(--line); border-radius:6px; padding:0 5px; background:var(--surface); color:var(--text); font:inherit; }
+.browser-viewport-controls > select:first-child { flex:1 1 135px; max-width:185px; }
+.browser-viewport-dimensions { display:flex; align-items:center; gap:4px; }
+.browser-viewport-dimensions input { width:53px; height:27px; border:1px solid transparent; border-radius:5px; padding:3px; background:transparent; color:var(--text); text-align:center; font:500 12px ui-monospace,monospace; appearance:textfield; }
+.browser-viewport-dimensions input::-webkit-inner-spin-button { appearance:none; }
+.browser-viewport-dimensions input:is(:hover,:focus) { background:var(--surface); border-color:var(--line); }
+.browser-viewport-dimensions input[aria-invalid="true"] { border-color:#b44a40; }
+.browser-viewport-dimensions .icon-button { width:25px; height:25px; }
+.browser-viewport-unit { color:var(--muted); font-size:10px; }
+.browser-viewport-controls small { flex-basis:100%; color:#b44a40; text-align:center; font-size:11px; }
+.browser-viewport-home { flex:1; min-height:0; position:relative; }
+.browser-viewport-stage { position:absolute; inset:0; overflow:hidden; }
+.browser-viewport-stage.responsive { padding:16px; overflow:auto; background:var(--tool-surface); }
+.browser-viewport-extent { width:100%; height:100%; margin-inline:auto; position:relative; }
+.responsive > .browser-viewport-extent { flex:none; box-shadow:0 0 0 1px var(--line); background:var(--surface); }
+.browser-viewport-content { display:flex; flex-direction:column; width:100%; height:100%; transform-origin:top left; overflow:hidden; background:var(--surface); }
+.browser-viewport-content > .live-browser-page { display:flex; width:100%; height:100%; flex:1; }
+.browser-viewport-content > .browser-annotation-empty { flex:1; }
