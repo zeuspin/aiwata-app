@@ -115,9 +115,9 @@ export function BotDirectory({ record, account, chat, select, onManageBots, onCr
           onKeyDown={event => { if (menuShortcut(event)) openMenu(event, 'row', { ...primary, kind: 'bot' }) }} {...previewEvents(primary)}>
           <span className="primary-bot-portrait"><BotFace bot={primary} size="large" state={botPresence(record.chats[primary.id])} interactive />
             <svg className="primary-bot-crown" aria-hidden="true" viewBox="0 0 28 20" fill="none">
-              <path d="m3 5 6 4 5-7 5 7 6-4-3 12H6L3 5Z" fill="#E5AD32" stroke="#BA8118" strokeWidth="1.2" strokeLinejoin="round" />
-              <path d="M7 14h14" stroke="#FFF0B8" strokeWidth="1.4" strokeLinecap="round" />
-              <circle cx="14" cy="10.5" r="1.4" fill="#FFF0B8" />
+              <path d="m3 5 6 4 5-7 5 7 6-4-3 12H6L3 5Z" fill="var(--ai-comp-workbench-bot-directory-botdirectory-fill)" stroke="var(--ai-comp-workbench-bot-directory-botdirectory-stroke)" strokeWidth="var(--ai-comp-workbench-bot-directory-botdirectory-strokewidth)" strokeLinejoin="round" />
+              <path d="M7 14h14" stroke="var(--ai-comp-workbench-bot-directory-botdirectory-stroke-8025238b4e)" strokeWidth="var(--ai-comp-workbench-bot-directory-botdirectory-strokewidth-1a948f1b43)" strokeLinecap="round" />
+              <circle cx="14" cy="10.5" r="1.4" fill="var(--ai-comp-workbench-bot-directory-botdirectory-fill-8025238b4e)" />
             </svg></span>
           <span className="primary-bot-name">{primary.name}</span>
         </button>}
@@ -136,7 +136,7 @@ export function BotDirectory({ record, account, chat, select, onManageBots, onCr
                 : <GroupFace account={account} members={resolveGroupMembers(item, record.bots).map(id => groupMember(item, record.bots, id))} />}
               <span className="bot-directory-copy"><span className="bot-directory-title">{item.name}</span>
                 <span className="bot-directory-preview">{conversationPreview(session, item)}</span></span>
-              <span className="bot-directory-status">{(directory.pinned ?? []).includes(item.id) && <Icon name="tag" size={11} />}
+              <span className="bot-directory-status">{(directory.pinned ?? []).includes(item.id) && <Icon name="tag" size={/* @ai-token sys.icon.size.11 */ 11} />}
                 {session && <ConversationStatus chat={session} />}</span>
             </button>
             <IconButton className="chat-row-menu" icon="more" label={'Bot 列表操作 · ' + item.name} aria-haspopup="menu"
@@ -161,7 +161,7 @@ export function BotDirectory({ record, account, chat, select, onManageBots, onCr
       change({ type: 'move', id: dialog.item.id, category: valueOf(form, 'category') })
     }}><label>移至分类<select name="category" aria-label="移至分类" defaultValue={categories.some(row => row.id === directory.placements?.[dialog.item.id]) ? directory.placements[dialog.item.id] : ''} autoFocus>
       <option value="">未分组</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-      </select></label><button type="button" className="secondary" onClick={() => categoryDialog(null, dialog.item.id)}><Icon name="add" size={14} />新建分类并移入</button>
+      </select></label><button type="button" className="secondary" onClick={() => categoryDialog(null, dialog.item.id)}><Icon name="add" size={/* @ai-token sys.icon.size.14 */ 14} />新建分类并移入</button>
     </Dialog>}
     {dialog?.kind === 'remove' && <Confirm title={'删除分类「' + dialog.item.name + '」？'} submit="删除分类" onClose={() => setDialog(null)}
       onConfirm={() => change({ type: 'remove-category', id: dialog.item.id })}>其中的 Bot 和群聊将移回“未分组”，会话会保留。</Confirm>}
@@ -175,8 +175,6 @@ function BotDirectoryPreview({ id, preview, record, account }) {
   useLayoutEffect(() => {
     const rect = anchor.getBoundingClientRect()
     const panel = ref.current
-    const theme = window.getComputedStyle(anchor)
-    for (const name of ['--surface', '--text', '--muted', '--line']) panel.style.setProperty(name, theme.getPropertyValue(name))
     const bounds = panel.getBoundingClientRect()
     panel.style.left = Math.max(8, Math.min(rect.right + 12, window.innerWidth - bounds.width - 8)) + 'px'
     panel.style.top = Math.max(8, Math.min(rect.top + rect.height / 2 - bounds.height / 2, window.innerHeight - bounds.height - 8)) + 'px'

@@ -1,8 +1,11 @@
+import { verifyDesignTokens } from './scripts/check-design-tokens.mjs';
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { liveAiwata } from "./scripts/live-aiwata-gateway.mjs";
+
+verifyDesignTokens({ core: resolve(process.env.AIWATA_APP_SOURCE || '../aiwata') });
 
 const native = process.env.AIWATA_APP_NATIVE === "1";
 const nativeSource = resolve(process.env.AIWATA_APP_SOURCE || "../aiwata");

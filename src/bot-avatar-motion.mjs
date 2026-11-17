@@ -10,12 +10,12 @@ export function createBotMotionController(view) {
   let frame = 0, timer = 0, lastTime = null, present = true, listening = false
   const now = () => view.performance.now()
   const allowed = () => !reduced.matches && pointer.matches && !document.hidden && present
-  const nextBlink = () => now() + 2600 + Math.random() * 4200
+  const nextBlink = () => now() + /* @ai-token comp.bot-motion.blink.interval-min */ 2600 + Math.random() * /* @ai-token comp.bot-motion.blink.interval-span */ 4200
 
   function paint(element, entry, blink = 1) {
-    element.style.setProperty('--bot-look-x', (entry.x * 2.6).toFixed(3) + 'px')
-    element.style.setProperty('--bot-look-y', (entry.y * 1.8).toFixed(3) + 'px')
-    element.style.setProperty('--bot-lean', (entry.x * 4).toFixed(3) + 'deg')
+    element.style.setProperty('--bot-look-x', (entry.x * /* @ai-token comp.bot-motion.look.extent-x */ 2.6).toFixed(3) + 'px')
+    element.style.setProperty('--bot-look-y', (entry.y * /* @ai-token comp.bot-motion.look.extent-y */ 1.8).toFixed(3) + 'px')
+    element.style.setProperty('--bot-lean', (entry.x * /* @ai-token comp.bot-motion.look.lean */ 4).toFixed(3) + 'deg')
     element.style.setProperty('--bot-blink', blink.toFixed(3))
   }
 
@@ -55,7 +55,7 @@ export function createBotMotionController(view) {
 
   function stepAxis(entry, axis, dt) {
     const velocity = 'v' + axis, target = 't' + axis
-    entry[velocity] += (256 * (entry[target] - entry[axis]) - 28 * entry[velocity]) * dt
+    entry[velocity] += (/* @ai-token comp.bot-motion.spring.stiffness */ 256 * (entry[target] - entry[axis]) - /* @ai-token comp.bot-motion.spring.damping */ 28 * entry[velocity]) * dt
     entry[axis] += entry[velocity] * dt
     if (Math.abs(entry[target] - entry[axis]) < .001 && Math.abs(entry[velocity]) < .005) {
       entry[axis] = entry[target]
@@ -76,8 +76,8 @@ export function createBotMotionController(view) {
       let blink = 1
       if (entry.blinkStart !== null) {
         const age = time - entry.blinkStart
-        if (age >= 180) entry.blinkStart = null
-        else blink = 1 - .9 * Math.sin(Math.PI * age / 180)
+        if (age >= /* @ai-token comp.bot-motion.blink.duration */ 180) entry.blinkStart = null
+        else blink = 1 - /* @ai-token comp.bot-motion.blink.depth */ 0.9 * Math.sin(Math.PI * age / /* @ai-token comp.bot-motion.blink.duration */ 180)
       }
       paint(element, entry, blink)
       moving ||= xMoving || yMoving || entry.blinkStart !== null
@@ -97,8 +97,8 @@ export function createBotMotionController(view) {
     if (!allowed()) return
     for (const [element, entry] of entries) {
       const rect = visible(element)
-      entry.tx = rect ? Math.tanh((event.clientX - rect.left - rect.width / 2) / 150) : 0
-      entry.ty = rect ? Math.tanh((event.clientY - rect.top - rect.height / 2) / 150) : 0
+      entry.tx = rect ? Math.tanh((event.clientX - rect.left - rect.width / 2) / /* @ai-token comp.bot-motion.look.reach */ 150) : 0
+      entry.ty = rect ? Math.tanh((event.clientY - rect.top - rect.height / 2) / /* @ai-token comp.bot-motion.look.reach */ 150) : 0
     }
     startFrame()
     if (!wasPresent) scheduleBlink()

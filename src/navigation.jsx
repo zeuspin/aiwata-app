@@ -77,7 +77,7 @@ function ChatRow({ item, current, select, onMenu, project }) {
     <button className="context-row chat-row" aria-label={item.title} aria-description={(project ? project.name : '无项目') + '，' + describeChat(item, project?.marker)}
       aria-current={current ? 'page' : undefined} onClick={() => select(item.id)}
       onKeyDown={event => { if (menuShortcut(event)) openMenu(event) }}>
-      {project ? <ConversationMarker marker={project.marker} /> : <Icon name="comment" size={14} />}
+      {project ? <ConversationMarker marker={project.marker} /> : <Icon name="comment" size={/* @ai-token sys.icon.size.14 */ 14} />}
       <span className="chat-name">{item.title}</span>
       <ConversationStatus chat={item} />
     </button>

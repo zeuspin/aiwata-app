@@ -8,7 +8,7 @@ export function LiveAgentInspector({ live, chat, connected }) {
   const [open, setOpen] = useState(false)
   return <>
     <button type="button" className="agent-inspector-trigger" disabled={!connected || !chat?.gatewayStoredId}
-      onClick={() => setOpen(true)}><Icon name="settings" size={13} />Agent 能力与任务</button>
+      onClick={() => setOpen(true)}><Icon name="settings" size={/* @ai-token sys.icon.size.13 */ 13} />Agent 能力与任务</button>
     {open && <Inspector key={chat.id + ':' + (chat.gatewayProfile ?? '')} live={live} chat={chat} onClose={() => setOpen(false)} />}
   </>
 }

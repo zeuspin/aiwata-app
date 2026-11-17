@@ -49,7 +49,7 @@ export function ProjectMarkerPicker({ title, marker, onSave, label = '更换标�
       title={label} aria-label={label} aria-description={currentLabel}
       onClick={() => setSaveFailed(false)}>
       {!marker && emptyIcon ? <Icon name={emptyIcon} /> : <ConversationMarker marker={marker} />}
-      {triggerText && <>{triggerText}<Icon name="chevron" size={12} /></>}
+      {triggerText && <>{triggerText}<Icon name="chevron" size={/* @ai-token sys.icon.size.12 */ 12} /></>}
     </button>
     <div ref={picker} id={id} popover="auto" className="popover project-marker-picker" role="dialog"
       aria-label={'项目标记 · ' + title}>

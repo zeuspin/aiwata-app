@@ -105,7 +105,7 @@ function ConnectionCard({ live, chat, request, onUpdate, report }) {
         const skippable = !['connected', 'skipped', 'not_connected'].includes(target.state) && !target.resolved
         const canApprove = connectionTargetAnswer(request, target.name, 'approved', targetValues(target), clock)
         const retryable = ['failed', 'expired'].includes(target.state) && !target.required_env?.length
-        return <section className="agent-detail" key={target.name} style={{ marginTop: 7 }}>
+        return <section className="agent-detail" key={target.name} style={{ marginTop: "var(--ai-comp-workbench-live-connection-request-connectioncard-margintop)" }}>
           <strong>{target.display || target.name}{target.alias ? ` · ${target.alias}` : ''} · {stateLabels[target.state]}</strong>
           <small> · {target.kind} / {actionLabels[target.action]}</small>
           {target.description && <p>{target.description}</p>}

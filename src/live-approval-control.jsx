@@ -71,13 +71,13 @@ export default function LiveApprovalControl({ live, profile, connected, name, re
         if (!open) void read()
         setOpen(value => !value)
       }}>
-      <Icon name="shield" size={15} /><span>{busy ? '正在保存…' : option?.label || (error ? '审批方式' : '读取审批方式…')}</span>
+      <Icon name="shield" size={/* @ai-token sys.icon.size.15 */ 15} /><span>{busy ? '正在保存…' : option?.label || (error ? '审批方式' : '读取审批方式…')}</span>
     </button>
     {open && <div className="popover composer-menu" aria-label="批准方式选项">
       <div className="popover-caption">{name ? name + ' · ' : ''}当前配置档的所有会话</div>
       {approvalModes.map(option => <button key={option.id} className="menu-row menu-option" type="button"
         aria-pressed={mode === option.id} disabled={busy} onClick={() => void select(option.id)}>
-        <span>{option.label}<small>{option.description}</small></span>{mode === option.id && <Icon name="check" size={15} />}
+        <span>{option.label}<small>{option.description}</small></span>{mode === option.id && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
       </button>)}
       {error && <><p role="alert" className="management-error">{error}</p>
         <button type="button" className="menu-row" disabled={busy} onClick={() => void read()}>重新读取审批方式</button></>}

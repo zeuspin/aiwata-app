@@ -1,7 +1,7 @@
+import { designValue } from './design/aiwata-tokens.mjs'
 // Native contract: appearance-apply.ts and themes/accents.ts. Layouts are
 // frontend-owned: report only layouts this workbench can actually render.
-export const appearanceAccents = { theme: null, mono: '#000000', green: '#2ea043', cyan: '#00d5ff', nous: null,
-  violet: '#8a2be2', pink: '#e0218a', red: '#ff073a', orange: '#ff6a00' }
+export const appearanceAccents = { theme: null, nous: null, ...Object.fromEntries(['mono', 'green', 'cyan', 'violet', 'pink', 'red', 'orange'].map(name => [name, designValue('sys.accent.preset.' + name)])) }
 export const appearanceLayouts = ['sidebar-left']
 export function appearanceChange(prior = {}, values = {}) {
   const applied = {}
@@ -24,10 +24,12 @@ export function appearanceChange(prior = {}, values = {}) {
 }
 export function appearanceStyle(preferences = {}, systemDark = false) {
   const dark = preferences.mode === 'dark' || preferences.mode === 'system' && systemDark
-  const accent = preferences.accent === 'mono' && dark ? '#ffffff'
-    : appearanceAccents[preferences.accent] ?? (preferences.accent?.startsWith('custom:') ? preferences.accent.slice(7) : undefined)
-  return { ...(dark ? { '--text': '#e9e9e8', '--muted': '#acaeaa', '--faint': '#90938f', '--surface': '#242624',
-    '--tool-surface': '#202220', '--sidebar': '#282a28', '--app-surface': '#191b19', '--hover': '#353835',
-    '--selected': '#3a3e3a', '--line': '#414441', color: '#e9e9e8', colorScheme: 'dark' } : {}),
+  const roles = { '--text': 'text-primary', '--muted': 'text-muted', '--faint': 'text-faint', '--surface': 'surface-primary',
+    '--tool-surface': 'surface-tool', '--sidebar': 'surface-sidebar', '--app-surface': 'surface-canvas', '--hover': 'surface-hover',
+    '--selected': 'surface-selected', '--line': 'border-default' }
+  const accent = preferences.accent === 'mono' && dark ? 'var(--ai-sys-accent-preset-mono-dark)'
+    : appearanceAccents[preferences.accent] ? 'var(--ai-sys-accent-preset-' + preferences.accent + ')'
+      : preferences.accent?.startsWith('custom:') ? preferences.accent.slice(7) : undefined
+  return { ...(dark ? { ...Object.fromEntries(Object.entries(roles).map(([key, role]) => [key, 'var(--ai-sys-dark-color-' + role + ')'])), colorScheme: 'dark' } : {}),
     ...(accent ? { '--accent': accent } : {}) }
 }

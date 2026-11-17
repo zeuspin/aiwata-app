@@ -11,10 +11,10 @@ import {
   IconTerminal2, IconWifiOff, IconX, IconClick, IconEye, IconEyeOff, IconGripVertical, IconCheck,
 } from '@tabler/icons-react'
 
-const botBlink = [{ scale: '1 1' }, { scale: '1 .14', offset: .45 }, { scale: '1 1' }]
+const botBlink = [{ scale: '1 1' }, { scale: /* @ai-token comp.icon.motion.blink-scale */ "1 .14", offset: /* @ai-token comp.icon.motion.blink-offset */ 0.45 }, { scale: '1 1' }]
 const botGlance = [
-  { translate: '0' }, { translate: '2.25px', offset: .25 },
-  { translate: '2.25px', offset: .72 }, { translate: '0' },
+  { translate: '0' }, { translate: /* @ai-token comp.icon.motion.glance-distance */ "2.25px", offset: /* @ai-token comp.icon.motion.glance-start */ 0.25 },
+  { translate: /* @ai-token comp.icon.motion.glance-distance */ "2.25px", offset: /* @ai-token comp.icon.motion.glance-end */ 0.72 }, { translate: '0' },
 ]
 
 function BotChatIcon({ size, stroke, animated, selected, ...props }) {
@@ -28,12 +28,12 @@ function BotChatIcon({ size, stroke, animated, selected, ...props }) {
 
     function schedule() {
       timer = window.setTimeout(() => {
-        const glance = Math.random() < .3
+        const glance = Math.random() < /* @ai-token comp.icon.motion.glance-probability */ 0.3
         animation = eyeGroup.animate(glance ? botGlance : botBlink, {
-          duration: glance ? 710 : 180, easing: 'ease-in-out',
+          duration: glance ? /* @ai-token comp.icon.motion.glance-duration */ 710 : /* @ai-token comp.icon.motion.blink-duration */ 180, easing: /* @ai-token comp.icon.motion.easing */ "ease-in-out",
         })
         schedule()
-      }, 2500 + Math.random() * 4000)
+      }, /* @ai-token comp.icon.motion.interval-min */ 2500 + Math.random() * /* @ai-token comp.icon.motion.interval-span */ 4000)
     }
 
     function stop() {
@@ -87,9 +87,9 @@ export const toolIcons = {
 
 const selectedIcons = { clock: IconClockFilled, folders: IconFoldersFilled }
 
-export function Icon({ name, size = 17, animated = false, selected = false }) {
+export function Icon({ name, size = /* @ai-token comp.icon.size */ 17, animated = false, selected = false }) {
   const Component = (selected && selectedIcons[name]) || icons[name]
-  return <Component aria-hidden="true" size={size} stroke={1.65} {...(['botChat', 'aiwata'].includes(name) ? { selected, ...(name === 'botChat' ? { animated } : {}) } : {})} />
+  return <Component aria-hidden="true" size={size} stroke={/* @ai-token comp.icon.stroke-width */ 1.65} {...(['botChat', 'aiwata'].includes(name) ? { selected, ...(name === 'botChat' ? { animated } : {}) } : {})} />
 }
 
 export function IconButton({ icon, label, className = '', selected = false, ...props }) {

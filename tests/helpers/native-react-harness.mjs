@@ -14,6 +14,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT=true
 globalThis.ResizeObserver=class {observe(){}disconnect(){}}
 window.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}})
 window.HTMLDialogElement.prototype.showModal=function(){this.open=true}
+window.HTMLDialogElement.prototype.close=function(){this.open=false}
 window.confirm=()=>true
 globalThis.requestAnimationFrame=window.requestAnimationFrame.bind(window)
 globalThis.cancelAnimationFrame=window.cancelAnimationFrame.bind(window)

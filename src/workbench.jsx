@@ -2,6 +2,7 @@ import { requestDesktopTip } from './desktop-tip-request.mjs'
 import { DesktopTip } from './desktop-tip.jsx'
 import { createAppTour, tourAction } from './desktop-tour.mjs'
 import { appearanceChange, appearanceStyle } from './desktop-appearance.mjs'
+import { applyDocumentTheme, readDesignHexColor } from './design/theme-runtime.mjs'
 import { browserState, closeToolInstances, terminalInstanceId, toolChat, toolEditsFor, toolType } from './tool-tabs.mjs'
 import { browserTabInfo } from './browser-tab.mjs'
 import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -117,6 +118,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const nativePrimaryGaps = useRef([])
   const [, refreshNativeSurfaces] = useState(0)
   useEffect(() => observeSystemTheme(window, setSystemDark), [])
+  useLayoutEffect(() => applyDocumentTheme(document.documentElement, appearanceStyle(record.navigation?.appearance, systemDark)), [account.id, record.navigation?.appearance, systemDark])
   const [{ section, chatId, item, fresh }, setRoute] = useState(() => {
     const section = record.navigation?.section ?? conversationSection(record, record.activeChat)
     return restoreRoute(record, section)
@@ -209,8 +211,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
       getTitleBarTheme: () => {
         const element = document.querySelector('.window')
         if (!element) return {}
-        const style = window.getComputedStyle(element)
-        return { background: style.getPropertyValue('--app-surface').trim(), foreground: style.getPropertyValue('--text').trim() }
+        return { background: readDesignHexColor(element, 'sys.color.surface.canvas'), foreground: readDesignHexColor(element, 'sys.color.text.primary') }
       },
       send: (...args) => nativePrimaryState.current.gateway.send(...args),
       navigateNative: path => {
@@ -358,7 +359,6 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     '--rail-size': (full ? 0 : railWidth) + 'px',
     '--context-size': fitted.side + 'px',
     '--tool-size': toolsWidth + 'px',
-    ...appearanceStyle(record.navigation?.appearance, systemDark),
     '--sidebar-content': (contextVisible ? fitted.side : panels.side) + 'px',
     '--flyout-width': panels.side + 'px',
   }
@@ -779,7 +779,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   useEffect(() => () => {
-    appTour.current?.stop()
+    appTour.current?.dispose()
     appTour.current = null
     const page = previewPage.current
     void Promise.resolve().then(() => page?.tour?.({ kind: 'stop' })).catch(() => {})
@@ -1291,7 +1291,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
             : <ToolPanel active={toolType(chat, preview.tool)} data={toolDataFor(preview.tool)} chat={toolChat(chat, preview.tool)} project={project} api={api} preview />}
         </div>
       </div>
-      <div className="tab-preview-title"><TabIcon {...toolTabData(preview.tool)} size={14} />{toolTabData(preview.tool).title}</div>
+      <div className="tab-preview-title"><TabIcon {...toolTabData(preview.tool)} size={/* @ai-token sys.icon.size.14 */ 14} />{toolTabData(preview.tool).title}</div>
     </div>}
     <div className="workspace-body">
       <div data-tour="sessions" className="rail-track" inert={full}>

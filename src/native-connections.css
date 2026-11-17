@@ -1,5 +1,5 @@
-.native-connections-dialog { width: min(760px, calc(100% - 28px)); }
-.native-connections-dialog .management-entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.native-connections-dialog { width: var(--ai-comp-workbench-native-connections-native-connections-dialog-width); }
+.native-connections-dialog .management-entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ai-comp-workbench-native-connections-native-connections-dialog-management-entry-gap); }
 .native-connections-dialog .management-entry .management-actions { justify-content: flex-start; }
 .native-connections-dialog .management-panel { margin-bottom: 0; }
 .native-connections-dialog .management-error { overflow-wrap: anywhere; }

@@ -104,7 +104,7 @@ export function LiveGit({ state, chat, api, visible = false, thumbnail = false }
       </div>}
       <ul className="tool-file-list">{files.map(file => <li key={file.path}><button type="button"
         aria-pressed={selected === file} onClick={() => update({ selected: file.path })}>
-        <Icon name="file" size={16} /><span title={file.path}>{file.path}</span><small>{labels(file)}</small>
+        <Icon name="file" size={/* @ai-token sys.icon.size.16 */ 16} /><span title={file.path}>{file.path}</span><small>{labels(file)}</small>
       </button></li>)}</ul>
       {repo.truncated && <p className="muted">变更较多，仅显示部分文件。</p>}
       {selected ? <section className="tool-file-preview" aria-label="Git 差异">
@@ -113,6 +113,6 @@ export function LiveGit({ state, chat, api, visible = false, thumbnail = false }
           : diff.data.patches.length ? diff.data.patches.map(patch => <Patch key={patch.kind} patch={patch} />)
             : <p className="muted">此范围暂无可显示的差异。</p>}
       </section> : <p className="muted">此范围暂无变更。</p>}
-    </> : <div className="tool-empty"><Icon name="git" size={30} /><h3>这个目录没有 Git 工作树</h3></div>}
+    </> : <div className="tool-empty"><Icon name="git" size={/* @ai-token sys.icon.size.30 */ 30} /><h3>这个目录没有 Git 工作树</h3></div>}
   </div>
 }

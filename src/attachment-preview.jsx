@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useId, useRef, useState } from 'react'
 import { IconButton } from './icons.jsx'
 import { readPreviewAttachment } from './native-artifacts.mjs'
 
@@ -35,7 +35,11 @@ export function AttachmentPreview({ api, live, chatId, sessionId, entry, onClose
   const [result, setPreview] = useState(null)
   const preview = result?.entry === entry && result.live === live && result.chatId === chatId && result.sessionId === sessionId ? result : null
 
-  useEffect(() => { dialog.current.showModal() }, [])
+  useLayoutEffect(() => {
+    const modal = dialog.current
+    modal.showModal()
+    return () => modal.close()
+  }, [])
 
   useEffect(() => {
     setPreview(null)

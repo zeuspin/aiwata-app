@@ -37,7 +37,7 @@ export function PreviewConsole({ store, state, destination, onDraft, report }) {
         drag.current = { y: event.clientY, height: panel.current.clientHeight }; setDragging(true)
       }} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}><span /></div>
     {dragging && <div className="preview-console-resize-shield" />}
-    <header><span className="preview-console-title"><Icon name="terminal" size={14} />预览控制台
+    <header><span className="preview-console-title"><Icon name="terminal" size={/* @ai-token sys.icon.size.14 */ 14} />预览控制台
       {selected.length > 0 && <small>已选 {selected.length}</small>}</span>
       <div className="preview-console-actions">
         <IconButton icon="copy" label={selected.length ? '复制所选日志' : '复制全部日志'} disabled={!state.logs.length} onClick={copy} />

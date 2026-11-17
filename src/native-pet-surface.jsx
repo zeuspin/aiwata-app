@@ -18,8 +18,8 @@ export function NativePetSurface({ controller, snapshot, hidden = false }) {
   const clamp=point=>({x:Math.max(0,Math.min(point.x,window.innerWidth-width)),y:Math.max(0,Math.min(point.y,window.innerHeight-height))})
   const plugin=payload.pluginMessages.reduce((latest,item)=>!latest||item.seq>latest.seq?item:latest,null)
   const point=clamp(position)
-  return <aside aria-label="原生 Pet" style={{position:'fixed',left:point.x,top:point.y,zIndex:90,width,height}}>
-    {plugin && <div role="status" style={{position:'absolute',bottom:'100%',left:0,minWidth:120,maxWidth:240,padding:'6px 9px',borderRadius:8,background:'var(--surface)',color:'var(--text)',boxShadow:'0 2px 10px #0002',fontSize:12}}>
+  return <aside aria-label="原生 Pet" style={{position:'fixed',left:point.x,top:point.y,zIndex:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-zindex)",width,height}}>
+    {plugin && <div role="status" style={{position:'absolute',bottom:'100%',left:0,minWidth:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-minwidth)",maxWidth:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-maxwidth)",padding:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-padding)",borderRadius:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-borderradius)",background:'var(--surface)',color:'var(--text)',boxShadow:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-boxshadow)",fontSize:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-fontsize)"}}>
       <small>{plugin.pluginName}</small><div>{plugin.text}</div>
     </div>}
     <button type="button" aria-label={(info.displayName||info.slug||'Pet')+'：Shift 点击浮出桌面，Alt 滚轮缩放'}
@@ -37,6 +37,6 @@ export function NativePetSurface({ controller, snapshot, hidden = false }) {
       <PetSprite info={info} stateOverride={state} />
     </button>
     {payload.unread && <button type="button" aria-label="打开有新消息的会话" title="查看新消息"
-      onClick={()=>void controller.openApp()} style={{position:'absolute',right:0,bottom:0,borderRadius:'50%',width:24,height:24}}>✉</button>}
+      onClick={()=>void controller.openApp()} style={{position:'absolute',right:0,bottom:0,borderRadius:'50%',width:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-width)",height:"var(--ai-comp-workbench-native-pet-surface-nativepetsurface-height)"}}>✉</button>}
   </aside>
 }

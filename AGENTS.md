@@ -159,3 +159,13 @@ Agent capability alignment targets the checked-out AIWATA runtime, including its
 ## 浏览器响应式尺寸预览（用户明确，2026-11-17）
 
 浏览器工具栏的响应式预览只调整网页CSS宽高；手机型号是尺寸快捷选项，不模拟移动UA、触控或DPR。支持手动宽高、横竖屏和独立展示缩放（适应窗口/固定比例），设置按账号、聊天、浏览器实例持久化。保留原生webview和交互状态；宿主标注输入框随展示比例定位，控制台/标注控制条保持正常大小。来源截图为“截屏2026-11-17 上午12.09.03.png”，详见本工程docs/superpowers/specs/2026-11-17-browser-responsive-design.md及相邻核心档案080。
+
+## 键盘焦点回归（用户批准，2026-11-17）
+
+保持当前布局与交互；原生弹窗在DOM移除前关闭并恢复焦点，菜单在命令执行前交回触发器，再由新弹窗或导航接管。输入框复用现有强调色边框，强制颜色模式保留系统色焦点轮廓。保存保护、Bot抽屉未保存保护、外部点击和组合输入提交规则不变。
+
+`npm run test:focus` 用真实隔离Electron验证这些合同，独立于普通jsdom套件；运行前需已有相邻核心工程（可设`AIWATA_APP_SOURCE`）、其Electron/esbuild/Playwright依赖和可用图形会话。测试不启动Agent或访问业务数据。
+
+## 完整桌面 token（084）
+
+视觉维护先读本工程 [DESIGNS.md](DESIGNS.md) 与核心权威规范。共享JSON是唯一手写源，`src/design/aiwata-tokens.*`仅为生成副本；`npm run check:design`检查同步。保留用户内容颜色、现有主题所属、工具实例与减少动态合同。

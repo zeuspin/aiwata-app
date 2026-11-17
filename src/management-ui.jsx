@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useLayoutEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { defaultProfile } from './management.mjs'
 import './management.css'
@@ -8,10 +8,10 @@ export const valueOf = (form, name) => String(form.get(name) ?? '').trim()
 
 export function Frame({ icon, title, description, children, actions, back, live }) {
   return <div className="management-content">
-    {back && <button className="management-back" onClick={back.onClick}><Icon name="back" size={15} />{back.label}</button>}
+    {back && <button className="management-back" onClick={back.onClick}><Icon name="back" size={/* @ai-token sys.icon.size.15 */ 15} />{back.label}</button>}
     <header className="management-header">
       <div className="management-heading">
-        <span className="management-icon"><Icon name={icon} size={20} /></span>
+        <span className="management-icon"><Icon name={icon} size={/* @ai-token sys.icon.size.20 */ 20} /></span>
         <div><h2>{title}</h2><p>{description}</p></div>
       </div>
       <div className="management-actions">{actions}</div>
@@ -33,7 +33,7 @@ export function Panel({ title, description, actions, children }) {
 
 export function Entry({ icon, face, title, subtitle, children }) {
   return <div className="management-entry">
-    {face ?? (icon && <span className="entry-icon"><Icon name={icon} size={17} /></span>)}
+    {face ?? (icon && <span className="entry-icon"><Icon name={icon} size={/* @ai-token sys.icon.size.17 */ 17} /></span>)}
     <div className="entry-text"><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</div>
     {children && <div className="management-actions">{children}</div>}
   </div>
@@ -52,8 +52,11 @@ export function Dialog({ title, onClose, onSubmit, submit = '保存', secondaryS
   const titleId = useId()
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  useEffect(() => {
-    ref.current.showModal()
+  useLayoutEffect(() => {
+    const dialog = ref.current
+    dialog.showModal()
+    // Close before React removes the focused dialog so native focus restoration runs.
+    return () => dialog.close()
   }, [])
   return <dialog ref={ref} className={['project-dialog', 'management-dialog', className].filter(Boolean).join(' ')} aria-labelledby={titleId} onCancel={event => {
     event.preventDefault()

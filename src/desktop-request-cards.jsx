@@ -107,8 +107,8 @@ function DesktopChoiceCard({ request, onRespond, disabled, error }) {
       <p>接收会话：{request.title || '当前会话'}</p>
       <div className="agent-card-actions">{options.map(option => <button key={option.id} type="button" className="secondary"
         disabled={disabled || busy} onClick={() => void answer(option.answer)}>
-        {option.color && <span aria-hidden="true" style={{ display: 'inline-block', width: 12, height: 12,
-          borderRadius: '50%', background: option.color, marginRight: 6 }} />}{option.label}
+        {option.color && <span aria-hidden="true" style={{ display: 'inline-block', width: "var(--ai-comp-workbench-desktop-request-cards-desktopchoicecard-width)", height: "var(--ai-comp-workbench-desktop-request-cards-desktopchoicecard-height)",
+          borderRadius: '50%', background: option.color, marginRight: "var(--ai-comp-workbench-desktop-request-cards-desktopchoicecard-marginright)" }} />}{option.label}
       </button>)}</div>
       {acceptsText && <label>{params.beat === 'name' ? '你的称呼' : '也可以直接描述你的选择'}
         <input value={text} maxLength={1000} disabled={disabled || busy} placeholder={typeof params.card?.suggested === 'string' ? params.card.suggested : ''}

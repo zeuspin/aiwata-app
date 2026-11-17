@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import './live-terminal.css'
+import { terminalPresentation, watchTerminalTheme, readDesignValue, onDesignThemeChange } from './design/theme-runtime.mjs'
 import { makeTerminalReader } from './terminal-reader.mjs'
 import { activateTerminalLink, createTerminalCommands, quoteTerminalPaths, resolveTerminalFontFamily, terminalClipboardIntent } from './terminal-interactions.mjs'
 
@@ -29,12 +30,12 @@ export default function LiveTerminal({ live, sessionId, instanceId, visible, onP
       }).catch(error=>{if(!signal.aborted)setProblem(error.message)})
     }
     const terminal = new Terminal({
-      disableStdin: true, cursorBlink: true, fontSize: 13, scrollback: 1500,
-      fontFamily: resolveTerminalFontFamily(''), linkHandler: { activate },
-      theme: { background: '#232724', foreground: '#e9eee8', cursor: '#d4e1cd', selectionBackground: '#526451' },
+      disableStdin: true, cursorBlink: true, scrollback: 1500,
+      ...terminalPresentation(host.current), linkHandler: { activate },
     })
     const fit = new FitAddon()
     terminal.loadAddon(fit); terminal.open(host.current); terminalRef.current=terminal;fitRef.current=()=>fit.fit()
+    const stopTheme = watchTerminalTheme(terminal, host.current, { fit: () => fit.fit(), updateFontFamily: false })
     readerCallback.current?.(makeTerminalReader(terminal));fit.fit()
     setStatus('正在连接终端…');setProblem('');setDisconnected(false);setMenu(null);setRecovered(false)
     let unmounted=false, viewer, terminalId, shell='', restored=false, ready=false, closedByShell=false, interacted=false
@@ -135,17 +136,24 @@ export default function LiveTerminal({ live, sessionId, instanceId, visible, onP
       if(restored){const{baseY,viewportY}=terminal.buffer.active;readingPositions?.set(readingKey,{terminalId,line:viewportY<baseY?viewportY:null})}
       controller.abort();observer.disconnect();cancelAnimationFrame(resizeFrame);clearTimeout(snapshotTimer)
       element.removeEventListener('dragover',drag);element.removeEventListener('drop',drop)
-      input.dispose();resize.dispose();selection.dispose();links.dispose();terminal.dispose();terminalRef.current=null;actions.current=null;fitRef.current=null;if(lifetime.current===controller)lifetime.current=null
+      stopTheme();input.dispose();resize.dispose();selection.dispose();links.dispose();terminal.dispose();terminalRef.current=null;actions.current=null;fitRef.current=null;if(lifetime.current===controller)lifetime.current=null
     }
   },[live,sessionId,instanceId,visible,attempt,readingPositions])
 
   useEffect(()=>{
     const terminal=terminalRef.current;if(!terminal)return
-    let current=true;const family=resolveTerminalFontFamily(font)
-    void Promise.allSettled(['400','700','italic 400'].map(weight=>document.fonts?.load(`${weight} 13px ${family}`))).then(()=>{
-      if(!current||terminalRef.current!==terminal)return
-      terminal.options.fontFamily=family;fitRef.current?.();terminal.refresh(0,terminal.rows-1)
-    });return()=>{current=false}
+    let current=true, generation=0
+    const applyFont=()=>{
+      const pending=++generation
+      const family=font ? resolveTerminalFontFamily(font) : readDesignValue(host.current, 'comp.terminal.font-family')
+      void Promise.allSettled(['400','700','italic 400'].map(weight=>document.fonts?.load(`${weight} ${terminal.options.fontSize}px ${family}`))).then(()=>{
+        if(!current||pending!==generation||terminalRef.current!==terminal)return
+        terminal.options.fontFamily=family;fitRef.current?.();terminal.refresh(0,terminal.rows-1)
+      })
+    }
+    applyFont()
+    const stop=onDesignThemeChange(host.current, applyFont)
+    return()=>{current=false;stop()}
   },[font,visible,attempt])
   useEffect(()=>{
     if(!menu)return
@@ -160,12 +168,12 @@ export default function LiveTerminal({ live, sessionId, instanceId, visible, onP
       {disconnected&&<button className="tool-text-button" type="button" onClick={()=>reconnect(value=>value+1)}>重新连接</button>}
     </div>
     {fonts&&<form className="live-terminal-bar" aria-label="终端字体设置" onSubmit={saveFont}>
-      <input aria-label="终端字体名称或 CSS 字体列表" value={fontDraft} onChange={event=>setFontDraft(event.target.value)} placeholder="JetBrains Mono（默认）" style={{minWidth:0,flex:1,color:'inherit',background:'#232724',border:'1px solid #526451',padding:5}}/>
+      <input aria-label="终端字体名称或 CSS 字体列表" value={fontDraft} onChange={event=>setFontDraft(event.target.value)} placeholder="JetBrains Mono（默认）" style={{minWidth:0,flex:1,color:'inherit',background:"var(--ai-comp-workbench-live-terminal-liveterminal-background)",border:"var(--ai-comp-workbench-live-terminal-liveterminal-border)",padding:"var(--ai-comp-workbench-live-terminal-liveterminal-padding)"}}/>
       <button type="button" onClick={()=>setFontDraft('')}>重置</button><button type="submit">保存</button>
     </form>}
     {problem&&<p className="live-terminal-error" role="alert">{problem}</p>}
     <div className="live-terminal-screen" ref={host} aria-label="终端输入和输出" data-terminal data-interactive-terminal onContextMenu={event=>{event.preventDefault();event.stopPropagation();setMenu({x:Math.min(event.clientX,window.innerWidth-150),y:Math.min(event.clientY,window.innerHeight-185)})}}/>
-    {menu&&<div role="menu" aria-label="终端操作" onPointerDown={event=>event.stopPropagation()} style={{position:'fixed',left:menu.x,top:menu.y,zIndex:1000,width:150,padding:5,background:'#303830',border:'1px solid #526451',borderRadius:8,boxShadow:'0 8px 28px #0005'}}>
+    {menu&&<div role="menu" aria-label="终端操作" onPointerDown={event=>event.stopPropagation()} style={{position:'fixed',left:menu.x,top:menu.y,zIndex:"var(--ai-comp-workbench-live-terminal-liveterminal-zindex)",width:"var(--ai-comp-workbench-live-terminal-liveterminal-width)",padding:"var(--ai-comp-workbench-live-terminal-liveterminal-padding)",background:"var(--ai-comp-workbench-live-terminal-liveterminal-background-4781e9e6c4)",border:"var(--ai-comp-workbench-live-terminal-liveterminal-border)",borderRadius:"var(--ai-comp-workbench-live-terminal-liveterminal-borderradius)",boxShadow:"var(--ai-comp-workbench-live-terminal-liveterminal-boxshadow)"}}>
       {[['copy','复制'],['paste','粘贴'],['selectAll','全选'],['clear','清屏']].map(([action,label])=><button key={action} type="button" role="menuitem" className="menu-row" disabled={action==='copy'&&!terminalRef.current?.hasSelection()||action==='paste'&&disconnected} onClick={()=>{void actions.current?.[action]();setMenu(null)}}>{label}</button>)}
       <button type="button" role="menuitem" className="menu-row" onClick={()=>{setFonts(true);setMenu(null)}} disabled={!live.terminalFont}>字体设置</button>
     </div>}

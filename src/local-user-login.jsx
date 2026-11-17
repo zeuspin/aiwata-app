@@ -57,7 +57,7 @@ export function LocalUserLogin({ service, onSelected, demo = false }) {
         else await onSelected?.(user)
       })}>
         <span className="avatar" style={{ '--avatar': user.color }}>{user.initial}</span>
-        <span>{user.name}<small>{demo ? '演示用户' : '本机虚拟用户'}</small></span><Icon name="right" size={15} />
+        <span>{user.name}<small>{demo ? '演示用户' : '本机虚拟用户'}</small></span><Icon name="right" size={/* @ai-token sys.icon.size.15 */ 15} />
       </button>
       <IconButton icon="trash" label={'删除' + user.name} disabled={locked} onClick={() => setDeleting(user)} />
     </div>)}</div>

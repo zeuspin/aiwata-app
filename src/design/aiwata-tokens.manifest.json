@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "source": "apps/shared/design/aiwata-tokens.json",
+  "tokenCount": 4801,
+  "artifacts": {
+    "src/design/aiwata-tokens.css": "8cb1e26bf8a992f72aa956955942fe1b9232c4151dcf765c9f98be076cd4195e",
+    "src/design/aiwata-tokens.mjs": "81fc116e1ca5746319fa1f4a4e51593f649139187f0fda2c006831036db4eae7"
+  },
+  "inlineSources": [
+    "src/bot-avatar-motion.mjs",
+    "src/icons.jsx",
+    "src/browser-annotation-card.mjs",
+    "src/App.jsx",
+    "src/bot-directory.jsx",
+    "src/browser-annotations.jsx",
+    "src/browser-console.jsx",
+    "src/browser-home.jsx",
+    "src/chat.jsx",
+    "src/conversation-meta.jsx",
+    "src/live-agent-inspector.jsx",
+    "src/live-approval-control.jsx",
+    "src/live-browser.jsx",
+    "src/live-files.jsx",
+    "src/live-git.jsx",
+    "src/live-memory.jsx",
+    "src/local-user-login.jsx",
+    "src/management-ui.jsx",
+    "src/management.jsx",
+    "src/navigation.jsx",
+    "src/surfaces.jsx",
+    "src/tab-controls.jsx",
+    "src/workbench.jsx"
+  ],
+  "querySources": [
+    "src/agent-transcript.css",
+    "src/bot-avatar-picker.css",
+    "src/bot-settings-content.css",
+    "src/bot-settings-drawer.css",
+    "src/management.css",
+    "src/startup.css",
+    "src/styles.css"
+  ],
+  "htmlSources": [
+    "index.html"
+  ]
+}

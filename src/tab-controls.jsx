@@ -211,10 +211,10 @@ export function ContextMenu({ position, groups, dismiss }) {
       {index > 0 && <div role="separator" className="menu-divider" />}
       {group.map(item => <button key={item.label} type="button" role="menuitem" disabled={item.disabled}
         className={'menu-row ' + (item.danger ? 'danger' : '')} onClick={() => {
-          dismiss(false)
+          dismiss(true)
           item.run()
         }}>
-        <Icon name={item.icon} size={16} />{item.label}
+        <Icon name={item.icon} size={/* @ai-token sys.icon.size.16 */ 16} />{item.label}
       </button>)}
     </React.Fragment>)}
   </div>
@@ -230,8 +230,10 @@ export function TabDialog({ action, onClose, onSubmit }) {
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
-  useEffect(() => {
-    dialog.current.showModal()
+  useLayoutEffect(() => {
+    const modal = dialog.current
+    modal.showModal()
+    return () => modal.close()
   }, [])
 
   return <dialog ref={dialog} className="project-dialog" aria-labelledby="tab-dialog-title" onCancel={event => {

@@ -400,12 +400,12 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
     {!group && !bot && !compact && !chat.messages.length && <div className="composer-context">
       {projectPicker ? <button type="button" className="control-text composer-project-trigger" aria-label="选择项目"
         aria-expanded={menu === 'projects'} onClick={openProjectPicker}>
-        {project ? <ConversationMarker marker={project.marker} /> : <Icon name="folder" size={15} />}
-        <span>{project?.name ?? '独立会话'}</span><Icon name="chevron" size={13} />
-      </button> : <span><Icon name="folder" size={15} />{project?.name ?? '独立会话'}</span>}
-      <span><Icon name="laptop" size={15} />此计算机</span>
+        {project ? <ConversationMarker marker={project.marker} /> : <Icon name="folder" size={/* @ai-token sys.icon.size.15 */ 15} />}
+        <span>{project?.name ?? '独立会话'}</span><Icon name="chevron" size={/* @ai-token sys.icon.size.13 */ 13} />
+      </button> : <span><Icon name="folder" size={/* @ai-token sys.icon.size.15 */ 15} />{project?.name ?? '独立会话'}</span>}
+      <span><Icon name="laptop" size={/* @ai-token sys.icon.size.15 */ 15} />此计算机</span>
       {projectPicker && menu === 'projects' && <section className="popover composer-menu project-select-menu" aria-label="项目选项">
-        <label className="project-select-search"><Icon name="search" size={15} />
+        <label className="project-select-search"><Icon name="search" size={/* @ai-token sys.icon.size.15 */ 15} />
           <input ref={projectSearchInput} aria-label="搜索项目" placeholder="搜索项目" value={projectSearch}
             onChange={event => setProjectSearch(event.target.value)} />
         </label>
@@ -416,17 +416,17 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
             focusArea()
           }}>
             <ConversationMarker marker={item.marker} /><span>{item.name}</span>
-            {item.id === project?.id && <Icon name="check" size={15} />}
+            {item.id === project?.id && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
           </button>)}
         <div className="menu-divider" />
         <button className="menu-row" type="button" onClick={() => { projectPicker.create(); setMenu('') }}>
-          <Icon name="add" size={15} />新建项目
+          <Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />新建项目
         </button>
         <button className="menu-row" type="button" aria-pressed={!project} onClick={() => {
           projectPicker.select(null)
           setMenu('')
           focusArea()
-        }}><Icon name="close" size={15} />不在项目中工作</button>
+        }}><Icon name="close" size={/* @ai-token sys.icon.size.15 */ 15} />不在项目中工作</button>
       </section>}
     </div>}
     <form className={'composer' + (dragging ? ' composer-dragging' : '')} onSubmit={event => { event.preventDefault(); submit() }}
@@ -478,9 +478,9 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
               const icon = entry?.kind === 'image' ? 'photo' : 'file'
               return <div className="attachment-chip" key={name} title={name + size}>
                 {isLocalAttachment(entry) ? <button type="button" aria-label={'预览附件 ' + name}
-                  onClick={() => onAttachmentPreview({ ...entry, name })}><Icon name={icon} size={14} /><span>{name}</span></button>
-                  : <span className="attachment-chip-name"><Icon name={icon} size={14} /><span>{name}</span></span>}
-                <button type="button" aria-label={'移除附件 ' + name} onClick={() => removeAttachment(name)}><Icon name="close" size={12} /></button>
+                  onClick={() => onAttachmentPreview({ ...entry, name })}><Icon name={icon} size={/* @ai-token sys.icon.size.14 */ 14} /><span>{name}</span></button>
+                  : <span className="attachment-chip-name"><Icon name={icon} size={/* @ai-token sys.icon.size.14 */ 14} /><span>{name}</span></span>}
+                <button type="button" aria-label={'移除附件 ' + name} onClick={() => removeAttachment(name)}><Icon name="close" size={/* @ai-token sys.icon.size.12 */ 12} /></button>
               </div>
             })}</div>}
             <textarea ref={area} autoFocus={autoFocus} aria-label={group ? '群聊消息' : 'Agent 输入框'} rows={compact ? Math.min(chat.draft.split('\n').length, 4) : 2}
@@ -508,7 +508,7 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
                     connected={approvalConnected} name={bot?.name} report={report} /></Suspense>
                 : !live && <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
                   aria-label="Agent 批准方式" title={mode.label} aria-expanded={menu === 'permission'} onClick={event => toggleMenu(event, 'permission')}>
-                  <Icon name="shield" size={15} /><span>{mode.label}</span>
+                  <Icon name="shield" size={/* @ai-token sys.icon.size.15 */ 15} /><span>{mode.label}</span>
                 </button>}
               </div>
               <div className="composer-actions">
@@ -516,11 +516,11 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
                   <button type="button" className="control-text composer-model" aria-label="选择会话模型" disabled={modelDisabled}
                     onClick={() => setModelPicker(true)}>
                     <span>{(chat.gatewayId ? chat.model : chat.gatewayModelPick?.model || liveModel) || '档案默认模型'}</span>
-                    <Icon name="chevron" size={14} />
+                    <Icon name="chevron" size={/* @ai-token sys.icon.size.14 */ 14} />
                   </button>)}
                 {!live && !group && !bot && <button type="button" className="control-text composer-model" aria-label="模型与用量来源" title={model.label + ' · ' + model.description}
                   aria-expanded={menu === 'source'} onClick={event => toggleMenu(event, 'source')}>
-                  <span>{model.label}</span><Icon name="chevron" size={14} />
+                  <span>{model.label}</span><Icon name="chevron" size={/* @ai-token sys.icon.size.14 */ 14} />
                 </button>}
                 {(!live || voiceService) && <IconButton icon="mic" label="语音输入" onClick={beginVoice} />}
                 {chat.pending && !chat.gatewayUnknown && !chat.agentRun?.room?.paused && <IconButton icon="stop" label={group ? '停止讨论' : '停止生成'} disabled={stopDisabled} onClick={stop} />}
@@ -537,14 +537,14 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
           id={suggestionId + '-' + index} key={item.insert} aria-selected={index === selected}
           onPointerMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => insertSuggestion(item)}>
           <span><strong>{item.label}</strong>{item.args && <em>{item.args}</em>}<small>{item.description}</small></span>
-          {item.icon && <Icon name={item.icon} size={15} />}
+          {item.icon && <Icon name={item.icon} size={/* @ai-token sys.icon.size.15 */ 15} />}
         </button>)}
       </div>}
       {menu === 'permission' && <div className="popover composer-menu" aria-label="批准方式选项">
         <div className="popover-caption">审批方式 · 当前配置档</div>
         {approvalModes.map(option => <button className="menu-row menu-option" type="button" key={option.id}
           aria-pressed={mode.id === option.id} onClick={() => { pickApproval(option.id); button.current?.focus() }}>
-          <span>{option.label}<small>{option.description}</small></span>{mode.id === option.id && <Icon name="check" size={15} />}
+          <span>{option.label}<small>{option.description}</small></span>{mode.id === option.id && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
         </button>)}
       </div>}
       {menu === 'source' && <div className="popover composer-menu composer-model-menu align-right" aria-label="模型来源选项">
@@ -553,13 +553,13 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
           <div className="popover-caption">{label} <span>{description}</span></div>
           {models.filter(item => item.source === id).map(item => <button type="button" className="menu-row menu-option" key={item.id}
             aria-pressed={item === model} onClick={() => { pickModel(item); button.current?.focus() }}>
-            <span>{item.label}<small>{item.description}</small></span>{item === model && <Icon name="check" size={15} />}
+            <span>{item.label}<small>{item.description}</small></span>{item === model && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
           </button>)}
         </div>)}
       </div>}
       {menu === 'attachments' && <div className="popover composer-menu" aria-label="添加素材选项">
         <button className="menu-row" type="button" onClick={() => picker.current?.click()}>
-          <Icon name="attach" size={15} />选择本地文件
+          <Icon name="attach" size={/* @ai-token sys.icon.size.15 */ 15} />选择本地文件
         </button>
         {!group && <button className="menu-row" type="button" onClick={() => insertStarter('@')}><span className="composer-menu-symbol">@</span>引用上下文</button>}
         {!group && <button className="menu-row" type="button" disabled={!canStartCommand} onClick={() => insertStarter('/')}>
@@ -568,7 +568,7 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
         {!!assets.length && <>
           <div className="popover-caption">从素材库添加</div>
           {assets.slice(0, 5).map(name => <button className="menu-row" type="button" key={name}
-            onClick={() => addAttachments([{ name, kind: 'asset' }])}><Icon name="file" size={15} /><span>{name}</span></button>)}
+            onClick={() => addAttachments([{ name, kind: 'asset' }])}><Icon name="file" size={/* @ai-token sys.icon.size.15 */ 15} /><span>{name}</span></button>)}
         </>}
       </div>}
     </form>

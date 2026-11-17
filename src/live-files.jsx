@@ -124,30 +124,30 @@ export function LiveFiles({ state, chat, api, visible = false, thumbnail = false
       {listing.entries.length ? <ul className="tool-file-list">{listing.entries.map(entry => <li key={entry.name}>
         <button aria-pressed={entry.directory ? undefined : entry === selected}
           onClick={() => entry.directory ? navigate(listing.root, [...path.parts, entry.name]) : navigate(listing.root, path.parts, entry.name)}>
-          <Icon name={entry.directory ? 'folder' : 'file'} size={17} /><span title={entry.name}>{entry.name}</span>
+          <Icon name={entry.directory ? 'folder' : 'file'} size={/* @ai-token sys.icon.size.17 */ 17} /><span title={entry.name}>{entry.name}</span>
           <small>{entry.directory ? '文件夹' : !Number.isFinite(entry.size) || entry.size<0 ? '文件' : entry.size < 1024 ? entry.size + ' B' : Math.ceil(entry.size / 1024) + ' KB'}</small>
         </button>
         {!thumbnail && listing.native && <NativeFileActions entry={entry} state={state} />}
-      </li>)}</ul> : <div className="tool-empty"><Icon name="folder" size={30} /><h3>这个目录里没有可查看的文件</h3></div>}
+      </li>)}</ul> : <div className="tool-empty"><Icon name="folder" size={/* @ai-token sys.icon.size.30 */ 30} /><h3>这个目录里没有可查看的文件</h3></div>}
       {listing.truncated && <p className="muted">目录较大，仅显示前 500 项。</p>}
     </>}
     {selected && <section className="tool-file-preview" aria-label="文件预览">
       <div className="tool-title"><strong>{selected.name}</strong><span className="tool-badge">预览</span></div>
       {!file ? <p role="status">正在读取文件…</p> : file.error ? <p role="alert" className="management-error">{file.error}</p>
         : preview.image ? <div className="image-preview"><img src={preview.image} alt={preview.name} /></div>
-          : preview.media && preview.mime==='application/pdf' ? <iframe title={preview.name} src={preview.media} style={{width:'100%',minHeight:500,border:0}} />
+          : preview.media && preview.mime==='application/pdf' ? <iframe title={preview.name} src={preview.media} style={{width:'100%',minHeight:"var(--ai-comp-workbench-live-files-livefiles-minheight)",border:0}} />
           : preview.media && preview.mime?.startsWith('video/') ? <video controls src={preview.media} style={{width:'100%'}} />
           : preview.media && preview.mime?.startsWith('audio/') ? <audio controls src={preview.media} />
-          : preview.mime==='text/html' && preview.text ? <><iframe title={preview.name} sandbox="" srcDoc={preview.text} style={{width:'100%',minHeight:400,border:0,background:'white'}} /><details><summary>查看 HTML 源码</summary><pre>{preview.text}</pre></details></>
+          : preview.mime==='text/html' && preview.text ? <><iframe title={preview.name} sandbox="" srcDoc={preview.text} style={{width:'100%',minHeight:"var(--ai-comp-workbench-live-files-livefiles-minheight-b113daae26)",border:0,background:'white'}} /><details><summary>查看 HTML 源码</summary><pre>{preview.text}</pre></details></>
           : preview.text !== undefined ? <pre>{preview.text || '空文件'}{preview.truncated && '\n… 预览已截断'}</pre>
             : <p className="muted">可下载查看此文件。</p>}
       {!thumbnail && preview && <>
         <div className="tool-action-row">
           <button className="secondary" disabled={busy || !preview.size || preview.size > attachmentSizeLimit} onClick={() => transfer(true)}>
-            <Icon name="attach" size={15} />添加到会话
+            <Icon name="attach" size={/* @ai-token sys.icon.size.15 */ 15} />添加到会话
           </button>
           <button className="secondary" disabled={busy || preview.size > attachmentSizeLimit} onClick={() => transfer(false)}>
-            <Icon name="download" size={15} />下载
+            <Icon name="download" size={/* @ai-token sys.icon.size.15 */ 15} />下载
           </button>
         </div>
         {preview.size > attachmentSizeLimit && <p className="muted">本机联调支持下载和添加不超过 16 MB 的文件。</p>}

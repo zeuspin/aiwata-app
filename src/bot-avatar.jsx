@@ -8,23 +8,23 @@ import { observeInteractiveBot } from './bot-avatar-motion.mjs'
 import './bot-avatar.css'
 
 function Eyes({ state, style }) {
-  if (state === 'done') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round">
+  if (state === 'done') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="var(--ai-comp-workbench-bot-avatar-eyes-strokewidth)" strokeLinecap="round">
     <path d="M22 35q3-5 6 0m8 0q3-5 6 0" />
   </g>
-  if (state === 'blocked') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round">
+  if (state === 'blocked') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="var(--ai-comp-workbench-bot-avatar-eyes-strokewidth)" strokeLinecap="round">
     <path d="m22 33 6 2m8 0 6-2" />
   </g>
-  if (state === 'stopped') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="3.1" strokeLinecap="round">
+  if (state === 'stopped') return <g className="bot-avatar-eyes" fill="none" stroke="currentColor" strokeWidth="var(--ai-comp-workbench-bot-avatar-eyes-strokewidth-35efc6ded4)" strokeLinecap="round">
     <path d="M22 35h6m8 0h6" />
   </g>
   const [width, height] = style === 'round' ? [8, 8] : style === 'narrow' ? [4, 11] : [6, 10]
   return <g className="bot-avatar-eyes" fill="currentColor">
-    {state === 'thinking' && <path d="m21 24 7 2m8 0 7-2" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />}
+    {state === 'thinking' && <path d="m21 24 7 2m8 0 7-2" fill="none" stroke="currentColor" strokeWidth="var(--ai-comp-workbench-bot-avatar-eyes-strokewidth-b8736b9999)" strokeLinecap="round" />}
     <rect className="bot-avatar-eye-open" x={25 - width / 2} y={34 - height / 2 - (state === 'waiting' ? 1 : 0)}
       width={width} height={height} rx={width / 2} />
     <rect className="bot-avatar-eye-open" x={39 - width / 2} y={34 - height / 2 + (state === 'waiting' ? 2 : 0)}
       width={width} height={height - (state === 'waiting' ? 2 : 0)} rx={width / 2} />
-    {state === 'waiting' && <path d="M30 43q2-2 4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
+    {state === 'waiting' && <path d="M30 43q2-2 4 0" fill="none" stroke="currentColor" strokeWidth="var(--ai-comp-workbench-bot-avatar-eyes-strokewidth-ec6c168f44)" strokeLinecap="round" />}
   </g>
 }
 
@@ -75,9 +75,9 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false, i
         <circle cx="54" cy="17" r="1.6" fill="currentColor" stroke="none" />
       </g>
       {mode === 'character' && <g className="bot-avatar-body">
-        <path d={path} fill={flat ? bodyColor : `url(#${gradient})`} style={{ stroke: flat ? 'none' : shade }} strokeOpacity=".28" strokeWidth="1.1" />
+        <path d={path} fill={flat ? bodyColor : `url(#${gradient})`} style={{ stroke: flat ? 'none' : shade }} strokeOpacity=".28" strokeWidth="var(--ai-comp-workbench-bot-avatar-botface-strokewidth)" />
         <g clipPath={`url(#${gradient}-shape)`}>
-          {!flat && <path className="bot-avatar-highlight" d="M17 26c2-4 6-7 11-8" fill="none" stroke="#fff" strokeOpacity=".52" strokeWidth="2.3" strokeLinecap="round" />}
+          {!flat && <path className="bot-avatar-highlight" d="M17 26c2-4 6-7 11-8" fill="none" stroke="var(--ai-comp-workbench-bot-avatar-botface-stroke)" strokeOpacity=".52" strokeWidth="var(--ai-comp-workbench-bot-avatar-botface-strokewidth-8771a6c041)" strokeLinecap="round" />}
           <g transform={eyeY ? `translate(0 ${eyeY})` : undefined}>
             <Eyes state={state} style={eyeStyle} />
             {state === 'idle' && !still && !interactive && <ellipse className="bot-avatar-idle-mouth" cx="32" cy="43" rx="2.7" ry="2.1" />}
@@ -108,7 +108,7 @@ export function BotFace({ bot, size = 'normal', state = 'idle', still = false, i
       </g>}
       {badge && <g className="bot-avatar-badge" transform="translate(17 17)">
         <circle cx="32" cy="32" r="8.3" />
-        <path d={badge} fill="none" stroke="white" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={badge} fill="none" stroke="var(--ai-comp-workbench-bot-avatar-botface-stroke-018fa96a44)" strokeWidth="var(--ai-comp-workbench-bot-avatar-botface-strokewidth-8d9f7a82ae)" strokeLinecap="round" strokeLinejoin="round" />
       </g>}
     </svg>
   </span>

@@ -19,7 +19,7 @@ export function NativeDeepLinkDialog({ controller, onOpenNativeSurface }) {
       <Field name="name" label="MCP 名称" defaultValue={item.request.name} required maxLength={64} disabled={item.busy || item.status === 'done'} />
       {item.request.transport === 'stdio' && <p role="alert" className="management-error">这是本地 stdio 服务。确认保存后，原生 Agent 可以启动下列命令，请核对命令、参数及环境配置。</p>}
       <p>将保存的完整服务器配置：</p>
-      <pre style={{maxHeight:260,overflow:'auto',whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(item.request.config,null,2)}</pre>
+      <pre style={{maxHeight:"var(--ai-comp-workbench-native-deep-link-dialog-nativedeeplinkdialog-maxheight)",overflow:'auto',whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(item.request.config,null,2)}</pre>
     </>}
     {item.type === 'skill' && <><p>来源：{item.identifier}</p><p>安装保留原生安全扫描。扫描拒绝时不会跳过检查。</p></>}
     {item.type === 'plugin' && <>
@@ -43,6 +43,6 @@ export function NativeDeepLinkDialog({ controller, onOpenNativeSurface }) {
     {item.busy && <p role="status">原生操作正在进行，请等待确认结果…</p>}
     {item.status === 'unknown' && <p role="alert">安装结果未知，不能把重试当成未安装。请先在原生插件列表核对。</p>}
     {item.status === 'done' && <p role="status">原生接口已确认操作完成。已有会话的工具集保持原生规则，后续会话读取新配置。</p>}
-    {item.lines?.length > 0 && <details open={Boolean(item.error)}><summary>原生操作日志</summary><pre style={{maxHeight:200,overflow:'auto',whiteSpace:'pre-wrap'}}>{item.lines.join('\n')}</pre></details>}
+    {item.lines?.length > 0 && <details open={Boolean(item.error)}><summary>原生操作日志</summary><pre style={{maxHeight:"var(--ai-comp-workbench-native-deep-link-dialog-nativedeeplinkdialog-maxheight-96f55d5e4c)",overflow:'auto',whiteSpace:'pre-wrap'}}>{item.lines.join('\n')}</pre></details>}
   </Dialog>
 }

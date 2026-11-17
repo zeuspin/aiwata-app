@@ -309,7 +309,7 @@ export function LiveBrowser({ chat, api, refresh, partition, visible, thumbnail,
           onClose: () => annotations.edit({ open: false }), destination: annotations.destination, busy: annotations.busy }}
         annotating={annotating} onBusy={setCapturing} onReady={setAnnotationReady} onAnnotationError={setAnnotationError} />
     </> : visible && <div className="browser-viewport-home"><BrowserViewportFrame settings={viewport}>{(availableTools.length === 1 ? <div className="browser-annotation-empty">
-      <Icon name="browser" size={32} /><h3>打开网页，直观描述修改</h3>
+      <Icon name="browser" size={/* @ai-token sys.icon.size.32 */ 32} /><h3>打开网页，直观描述修改</h3>
       <p>在地址栏输入网址，点击标注后可选择元素或框选区域，将截图和修改意见添加到当前{annotations.destination?.kind === 'group' ? '群聊' : 'Bot'}的草稿。</p>
       {!partition && <small>网页载入和截图需要桌面宿主。</small>}
     </div> : <BrowserHome openTool={openTool} availableTools={availableTools} />)}</BrowserViewportFrame></div>}

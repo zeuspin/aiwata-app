@@ -127,7 +127,7 @@ function WorkspaceApp({native,onManageConnections,selectedUser,onUserLogout}) {
                 <button key={item.id} disabled={connecting || (native && native.status!=='ready')} onClick={() => selectAccount(item.id)}>
                   <span className="avatar" style={{ '--avatar': item.color }}>{item.initial}</span>
                   <span>{item.name}<small>{native ? '原生桌面连接' : '演示账号'}</small></span>
-                  <Icon name="right" size={15} />
+                  <Icon name="right" size={/* @ai-token sys.icon.size.15 */ 15} />
                 </button>)}</div>
             : <button className="primary" onClick={() => setSimulatedOffline(false)} disabled={!simulatedOffline}>恢复模拟网络</button>}
           <span className="login-note">{native ? 'AIWATA 桌面应用' : live ? 'AIWATA 本机联调' : '本地交互原型'}</span>

@@ -1,26 +1,26 @@
-.preview-console { position: absolute; inset-inline: 0; bottom: 0; z-index: 24; display: flex; flex-direction: column; min-height: 32px; max-height: calc(100% - 40px); border-top: 1px solid var(--line); background: var(--surface); color: var(--text); }
-.preview-console > header { flex: none; height: 32px; min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--line); }
-.preview-console-title, .preview-console-actions { display: flex; align-items: center; gap: 5px; }
-.preview-console-title { color: var(--muted); font-size: 11px; font-weight: 500; white-space: nowrap; }
-.preview-console-title small { background: var(--sidebar); border-radius: 999px; padding: 1px 5px; font-size: 9px; }
-.preview-console-actions .icon-button, .preview-console-row .icon-button { width: 23px; height: 23px; border-radius: 4px; }
-.preview-console-actions svg, .preview-console-row .icon-button svg { width: 13px; height: 13px; }
-.preview-console-body { flex: 1; min-height: 0; overflow: auto; padding: 6px 8px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.preview-console-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 23px; gap: 8px; padding: 4px; border: 1px solid transparent; border-radius: 6px; align-items: start; }
+.preview-console { position: absolute; inset-inline: 0; bottom: 0; z-index: var(--ai-comp-workbench-browser-console-preview-console-z-index); display: flex; flex-direction: column; min-height: var(--ai-comp-workbench-browser-console-preview-console-min-height); max-height: var(--ai-comp-workbench-browser-console-preview-console-max-height); border-top: var(--ai-comp-workbench-browser-console-preview-console-border-top-size-1) solid var(--line); background: var(--surface); color: var(--text); }
+.preview-console > header { flex: none; height: var(--ai-comp-workbench-browser-console-preview-console-header-height); min-height: var(--ai-comp-workbench-browser-console-preview-console-header-min-height); display: flex; align-items: center; justify-content: space-between; gap: var(--ai-comp-workbench-browser-console-preview-console-header-gap); padding: var(--ai-comp-workbench-browser-console-preview-console-header-padding); border-bottom: var(--ai-comp-workbench-browser-console-preview-console-header-border-bottom-size-1) solid var(--line); }
+.preview-console-title, .preview-console-actions { display: flex; align-items: center; gap: var(--ai-comp-workbench-browser-console-preview-console-title-preview-console-actions-gap); }
+.preview-console-title { color: var(--muted); font-size: var(--ai-comp-workbench-browser-console-preview-console-title-font-size); font-weight: var(--ai-comp-workbench-browser-console-preview-console-title-font-weight); white-space: nowrap; }
+.preview-console-title small { background: var(--sidebar); border-radius: var(--ai-comp-workbench-browser-console-preview-console-title-small-border-radius); padding: var(--ai-comp-workbench-browser-console-preview-console-title-small-padding); font-size: var(--ai-comp-workbench-browser-console-preview-console-title-small-font-size); }
+.preview-console-actions .icon-button, .preview-console-row .icon-button { width: var(--ai-comp-workbench-browser-console-preview-console-actions-icon-button-preview-console-row-icon-button-width); height: var(--ai-comp-workbench-browser-console-preview-console-actions-icon-button-preview-console-row-icon-button-height); border-radius: var(--ai-comp-workbench-browser-console-preview-console-actions-icon-button-preview-console-row-icon-button-border-radius); }
+.preview-console-actions svg, .preview-console-row .icon-button svg { width: var(--ai-comp-workbench-browser-console-preview-console-actions-svg-preview-console-row-icon-button-svg-width); height: var(--ai-comp-workbench-browser-console-preview-console-actions-svg-preview-console-row-icon-button-svg-height); }
+.preview-console-body { flex: 1; min-height: 0; overflow: auto; padding: var(--ai-comp-workbench-browser-console-preview-console-body-padding); font: var(--ai-comp-workbench-browser-console-preview-console-body-font); }
+.preview-console-row { display: grid; grid-template-columns: var(--ai-comp-workbench-browser-console-preview-console-row-grid-template-columns); gap: var(--ai-comp-workbench-browser-console-preview-console-row-gap); padding: var(--ai-comp-workbench-browser-console-preview-console-row-padding); border: var(--ai-comp-workbench-browser-console-preview-console-row-border); border-radius: var(--ai-comp-workbench-browser-console-preview-console-row-border-radius); align-items: start; }
 .preview-console-row:hover, .preview-console-row.selected { background: var(--sidebar); }
 .preview-console-row.selected { border-color: var(--line); }
 .preview-console-row pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-.preview-console-row small { display: block; font-family: inherit; font-size: 10px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
-.preview-console-level { text-align: left; text-transform: uppercase; font-size: 10px; opacity: .75; padding-top: 2px; }
-.preview-console-level:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
-.preview-console-row.level-info { color: #276494; }
-.preview-console-row.level-warn { color: #8b6414; }
-.preview-console-row.level-error { color: #aa3933; }
+.preview-console-row small { display: block; font-family: inherit; font-size: var(--ai-comp-workbench-browser-console-preview-console-row-small-font-size); line-height: var(--ai-comp-workbench-browser-console-preview-console-row-small-line-height); color: var(--muted); overflow-wrap: anywhere; }
+.preview-console-level { text-align: left; text-transform: uppercase; font-size: var(--ai-comp-workbench-browser-console-preview-console-level-font-size); opacity: var(--ai-comp-workbench-browser-console-preview-console-level-opacity); padding-top: var(--ai-comp-workbench-browser-console-preview-console-level-padding-top); }
+.preview-console-level:focus-visible { outline: var(--ai-comp-workbench-browser-console-preview-console-level-focus-visible-outline-size-1) solid var(--muted); outline-offset: var(--ai-comp-workbench-browser-console-preview-console-level-focus-visible-outline-offset); }
+.preview-console-row.level-info { color: var(--ai-comp-workbench-browser-console-preview-console-row-level-info-color); }
+.preview-console-row.level-warn { color: var(--ai-comp-workbench-browser-console-preview-console-row-level-warn-color); }
+.preview-console-row.level-error { color: var(--ai-comp-workbench-browser-console-preview-console-row-level-error-color); }
 .preview-console-row .icon-button { opacity: 0; }
 .preview-console-row:is(:hover, :focus-within) .icon-button { opacity: 1; }
-.preview-console-empty { margin: 4px 0; color: var(--muted); font: inherit; }
-.preview-console-resizer { position: absolute; inset-inline: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 2; display: grid; place-items: center; touch-action: none; }
-.preview-console-resizer span { width: 92px; height: 3px; border-radius: 999px; background: var(--muted); opacity: 0; }
-.preview-console-resizer:is(:hover, :focus-visible) span { opacity: .5; }
-.preview-console-resize-shield { position: fixed; inset: 0; z-index: 1000; cursor: row-resize; }
+.preview-console-empty { margin: var(--ai-comp-workbench-browser-console-preview-console-empty-margin); color: var(--muted); font: inherit; }
+.preview-console-resizer { position: absolute; inset-inline: 0; top: var(--ai-comp-workbench-browser-console-preview-console-resizer-top); height: var(--ai-comp-workbench-browser-console-preview-console-resizer-height); cursor: row-resize; z-index: var(--ai-comp-workbench-browser-console-preview-console-resizer-z-index); display: grid; place-items: center; touch-action: none; }
+.preview-console-resizer span { width: var(--ai-comp-workbench-browser-console-preview-console-resizer-span-width); height: var(--ai-comp-workbench-browser-console-preview-console-resizer-span-height); border-radius: var(--ai-comp-workbench-browser-console-preview-console-resizer-span-border-radius); background: var(--muted); opacity: 0; }
+.preview-console-resizer:is(:hover, :focus-visible) span { opacity: var(--ai-comp-workbench-browser-console-preview-console-resizer-is-hover-focus-visible-span-opacity); }
+.preview-console-resize-shield { position: fixed; inset: 0; z-index: var(--ai-comp-workbench-browser-console-preview-console-resize-shield-z-index); cursor: row-resize; }
 @media (hover: none) { .preview-console-row .icon-button { opacity: 1; } }

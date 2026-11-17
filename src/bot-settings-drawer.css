@@ -1,33 +1,33 @@
 .bot-settings-drawer {
   position: fixed;
-  inset: 16px 16px 16px auto;
-  width: min(580px, calc(100vw - 32px));
+  inset: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-inset);
+  width: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-width);
   max-width: none;
-  height: calc(100dvh - 32px);
+  height: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-height);
   max-height: none;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  border: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-border-size-1) solid var(--line);
+  border-radius: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-border-radius);
   background: var(--surface);
   color: var(--text);
-  box-shadow: 0 18px 70px #0002;
+  box-shadow: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-box-shadow);
   overflow: hidden;
 }
 .bot-settings-drawer[open] { display: flex; flex-direction: column; }
-.bot-settings-drawer::backdrop { background: #0b111520; }
+.bot-settings-drawer::backdrop { background: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-backdrop-background); }
 .bot-settings-drawer-heading {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 21px 24px 17px; border-bottom: 1px solid var(--line); flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-gap);
+  padding: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-padding); border-bottom: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-border-bottom-size-1) solid var(--line); flex: none;
 }
-.bot-settings-drawer-heading span { font-size: 11px; color: var(--muted); }
-.bot-settings-drawer-heading h2 { margin-top: 4px; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
+.bot-settings-drawer-heading span { font-size: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-span-font-size); color: var(--muted); }
+.bot-settings-drawer-heading h2 { margin-top: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-h2-margin-top); font-size: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-h2-font-size); line-height: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-heading-h2-line-height); overflow-wrap: anywhere; }
 .bot-settings-drawer-heading > div { min-width: 0; }
-.bot-settings-drawer-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px 24px 24px; }
+.bot-settings-drawer-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-body-padding); }
 .bot-settings-drawer-body .management-content { width: 100%; }
-.bot-settings-drawer-body .management-heading h2 { font-size: 18px; }
-@media (max-width: 600px) {
-  .bot-settings-drawer { inset: 8px; width: calc(100vw - 16px); height: calc(100dvh - 16px); border-radius: 14px; }
-  .bot-settings-drawer-heading { padding: 17px 16px 14px; }
-  .bot-settings-drawer-body { padding: 16px; }
+.bot-settings-drawer-body .management-heading h2 { font-size: var(--ai-comp-workbench-bot-settings-drawer-bot-settings-drawer-body-management-heading-h2-font-size); }
+@media /* @ai-query sys.layout.query.workbench-bot-settings-drawer.media-8c12bfe8 */ (max-width: 600px) {
+  .bot-settings-drawer { inset: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-inset); width: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-width); height: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-height); border-radius: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-border-radius); }
+  .bot-settings-drawer-heading { padding: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-heading-padding); }
+  .bot-settings-drawer-body { padding: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-body-padding); }
 }

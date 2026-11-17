@@ -13,7 +13,7 @@ function ConnectionEditor({ controller, state, host }) {
   const patch = value => controller.patchDraft(value)
   const changeHeader = (index, value) => patch({ headers: draft.headers.map((row, i) => i === index ? { ...row, ...value } : row) })
   return <Panel title={draft.persisted ? '编辑连接' : '添加连接'} description="保存连接不会切换当前工作区。">
-    <fieldset disabled={disabled} style={{ border: 0, margin: 0, padding: 14, display: 'grid', gap: 11 }}>
+    <fieldset disabled={disabled} style={{ border: 0, margin: 0, padding: "var(--ai-comp-workbench-native-connections-connectioneditor-padding)", display: 'grid', gap: "var(--ai-comp-workbench-native-connections-connectioneditor-gap)" }}>
       <label>连接方式<select value={draft.kind} disabled={draft.persisted} onChange={event => controller.create(event.target.value)}>
         <option value="local" disabled={!draft.persisted && state.registry?.connections.some(row => row.kind === 'local')}>本机</option>
         <option value="ssh">SSH</option><option value="remote">URL</option>
@@ -36,7 +36,7 @@ function ConnectionEditor({ controller, state, host }) {
           {state.probe && <small>{state.probe.authMode === 'oauth' ? '网关支持网页登录' : state.probe.authMode === 'token' ? '网关使用令牌' : '网关认证方式未知'}{state.probe.version ? ` · ${state.probe.version}` : ''}</small>}
         </div>
         <p className="management-empty" style={{ padding: 0 }}>令牌和请求头交给原生宿主保存，不写入工作区或浏览器存储。留空的已存请求头保持原值；移除行后保存会删除该请求头。</p>
-        {draft.headers.map((row, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', alignItems: 'end', gap: 7 }}>
+        {draft.headers.map((row, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: "var(--ai-comp-workbench-native-connections-connectioneditor-gridtemplatecolumns)", alignItems: 'end', gap: "var(--ai-comp-workbench-native-connections-connectioneditor-gap-a15202ec59)" }}>
           <Field label={`请求头 ${index + 1} 名称`} value={row.name} placeholder="CF-Access-Client-Id" autoComplete="off" onChange={event => changeHeader(index, { name: event.target.value })} />
           <Field label={`请求头 ${index + 1} 值`} type="password" value={row.value} placeholder={row.stored ? '已保存；留空保持' : '输入值'} autoComplete="new-password" onChange={event => changeHeader(index, { value: event.target.value })} />
           <button type="button" className="secondary" aria-label={`移除请求头 ${index + 1}`} onClick={() => patch({ headers: draft.headers.filter((_, i) => i !== index) })}>移除</button>

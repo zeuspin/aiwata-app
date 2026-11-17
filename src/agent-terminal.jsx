@@ -4,18 +4,19 @@ import { FitAddon } from '@xterm/addon-fit'
 import { makeTerminalReader } from './terminal-reader.mjs'
 import '@xterm/xterm/css/xterm.css'
 import './live-terminal.css'
+import { terminalPresentation, watchTerminalTheme } from './design/theme-runtime.mjs'
 
 export default function AgentTerminal({ process, onReader }) {
   const element = useRef(null), state = useRef(null), callbacks = useRef(onReader)
   callbacks.current = onReader
   useEffect(() => {
-    const terminal = new Terminal({ disableStdin: true, fontSize: 13, scrollback: 1500,
-      theme: { background: '#232724', foreground: '#e9eee8' } })
+    const terminal = new Terminal({ disableStdin: true, scrollback: 1500, ...terminalPresentation(element.current, { agent: true }) })
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(element.current); fit.fit()
     const observer = new ResizeObserver(() => fit.fit()); observer.observe(element.current)
+    const stopTheme = watchTerminalTheme(terminal, element.current, { agent: true, fit: () => fit.fit() })
     state.current = { terminal, output: '' }
     callbacks.current?.(makeTerminalReader(terminal))
-    return () => { callbacks.current?.(null); observer.disconnect(); terminal.dispose(); state.current = null }
+    return () => { callbacks.current?.(null); stopTheme(); observer.disconnect(); terminal.dispose(); state.current = null }
   }, [process.id])
   useEffect(() => {
     const entry = state.current

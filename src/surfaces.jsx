@@ -29,9 +29,11 @@ export function ProjectDialog({ onClose, onCreate, pickFolders, loadFolders, cre
   const desktop = window.hermesDesktop
   const hasDirectoryPicker = typeof window.showDirectoryPicker === 'function'
 
-  useEffect(() => {
-    dialog.current.showModal()
+  useLayoutEffect(() => {
+    const modal = dialog.current
+    modal.showModal()
     return () => {
+      modal.close()
       folderRequest.current += 1
       folderController.current?.abort()
     }
@@ -150,12 +152,12 @@ export function ProjectDialog({ onClose, onCreate, pickFolders, loadFolders, cre
       <div className="project-folder-field" role="group" aria-labelledby="project-folder-heading">
         <div className="project-folder-heading">
           <span id="project-folder-heading">源文件夹</span>
-          {folders.length > 0 && <span className="muted"><Icon name="laptop" size={15} />此电脑</span>}
+          {folders.length > 0 && <span className="muted"><Icon name="laptop" size={/* @ai-token sys.icon.size.15 */ 15} />此电脑</span>}
         </div>
         {folders.length ? <div className="project-folder-choice project-folder-selected">
           <ul className="project-folder-list" aria-label="已选文件夹">
             {folders.map((folder, index) => <li key={folder} className="project-folder-row">
-              <Icon name="folder" size={17} />
+              <Icon name="folder" size={/* @ai-token sys.icon.size.17 */ 17} />
               <span className="project-folder-name" title={folder}>{folderName(folder)}</span>
               {index === 0 && folders.length > 1 && <small className="project-folder-primary">主目录</small>}
               {index > 0 && <button className="project-folder-primary" type="button" aria-label={'将 ' + folderName(folder) + ' 设为主目录'}
@@ -164,12 +166,12 @@ export function ProjectDialog({ onClose, onCreate, pickFolders, loadFolders, cre
             </li>)}
           </ul>
           <button className="project-folder-row project-folder-add" type="button" disabled={picking} onClick={pickFolder}>
-            <Icon name="folderAdd" size={17} />添加文件夹
+            <Icon name="folderAdd" size={/* @ai-token sys.icon.size.17 */ 17} />添加文件夹
           </button>
         </div> : <div className="project-folder-choice">
           <p>在<strong>此电脑</strong>上添加文件夹</p>
           <button className="secondary" type="button" aria-label="选择目录" disabled={picking} onClick={pickFolder}>
-            <Icon name="folderAdd" size={15} />添加
+            <Icon name="folderAdd" size={/* @ai-token sys.icon.size.15 */ 15} />添加
           </button>
         </div>}
         {folderStatus && <small role="status">{folderStatus}</small>}
@@ -179,7 +181,7 @@ export function ProjectDialog({ onClose, onCreate, pickFolders, loadFolders, cre
         {availableFolders && <div className="project-folder-selected" role="group" aria-label="当前用户可用目录">
           {availableFolders.map(folder => <button type="button" key={folder.path} className="project-folder-row"
             disabled={folders.includes(folder.path)} onClick={() => addFolders([folder.path])}>
-            <Icon name="folder" size={16} />{folder.name}
+            <Icon name="folder" size={/* @ai-token sys.icon.size.16 */ 16} />{folder.name}
           </button>)}
         </div>}
         {availableFolders && createFolder && <div className="project-demo-folder">
@@ -244,7 +246,7 @@ function BrowserPage({ url, navigate, annotating, selectTarget, selection }) {
     <nav aria-label="演示网页导航">{pageLinks.map(([path, label]) => <button key={path}
       aria-current={!annotating && internal && pageUrl.pathname === path ? 'page' : undefined}
       aria-pressed={annotating ? selection === label : undefined} onClick={() => target(label, path)}>
-      {label}<Icon name="next" size={14} />
+      {label}<Icon name="next" size={/* @ai-token sys.icon.size.14 */ 14} />
     </button>)}</nav>
   </article>
 }
@@ -289,7 +291,7 @@ function BrowserTool({ openTool, chat, api, refresh, report, preview }) {
     {(url || agentActions.length > 0) && <div className="tool-home browser-document">
       <div className="browser-document-actions">
         {url && <button type="button" className="secondary" aria-pressed={annotating} disabled={replayIndex !== null}
-          onClick={() => annotations.edit({ open: !annotating })}><Icon name="edit" size={15} />批注{annotations.pins.length ? ' · ' + annotations.pins.length : ''}</button>}
+          onClick={() => annotations.edit({ open: !annotating })}><Icon name="edit" size={/* @ai-token sys.icon.size.15 */ 15} />批注{annotations.pins.length ? ' · ' + annotations.pins.length : ''}</button>}
       </div>
       {url && <BrowserPage key={url + reload} url={url} navigate={navigate} annotating={annotating}
         selectTarget={target => annotations.edit({ target })} selection={annotations.draft.target} />}
@@ -304,7 +306,7 @@ function CanvasTool({ data, set }) {
   return <div className="tool-home">
     <div className="tool-title"><h3>无限画布</h3><button className="secondary" onClick={() => set('notes', [...data.notes, '新便签'])}><Icon name="add" />添加便签</button></div>
     {data.notes.length ? <div className="notes-grid">{data.notes.map((note, index) => <textarea key={index} aria-label={'便签 ' + (index + 1)} value={note} onChange={e => set('notes', data.notes.map((item, i) => i === index ? e.target.value : item))} />)}</div>
-      : <div className="tool-empty"><Icon name="canvas" size={32} /><h3>从一张便签开始</h3><p>把这个会话里的想法放进画布。</p></div>}
+      : <div className="tool-empty"><Icon name="canvas" size={/* @ai-token sys.icon.size.32 */ 32} /><h3>从一张便签开始</h3><p>把这个会话里的想法放进画布。</p></div>}
   </div>
 }
 
@@ -383,9 +385,9 @@ function FileTool({ data, set, chat, project, attach, api, visible: paneVisible,
       <button key={type} aria-pressed={filter === type} onClick={() => set('fileFilter', type)}>{type}</button>)}</div>
     {visible.length ? <ul className="tool-file-list">{visible.map(file => <li key={toolFileKey(file)}>
       <button aria-pressed={selected === file} onClick={() => set('selectedFile', toolFileKey(file))}>
-        <Icon name={file.url ? 'photo' : 'file'} size={17} /><span>{file.name}</span><small>{file.type}</small>
+        <Icon name={file.url ? 'photo' : 'file'} size={/* @ai-token sys.icon.size.17 */ 17} /><span>{file.name}</span><small>{file.type}</small>
       </button>
-    </li>)}</ul> : <div className="tool-empty"><Icon name="folder" size={30} /><h3>暂无文件</h3><p>产物和附件会出现在此处。</p></div>}
+    </li>)}</ul> : <div className="tool-empty"><Icon name="folder" size={/* @ai-token sys.icon.size.30 */ 30} /><h3>暂无文件</h3><p>产物和附件会出现在此处。</p></div>}
     {selected && <section className="tool-file-preview" aria-label="文件预览">
       <div className="tool-title"><strong>{selected.name}</strong><span className="tool-badge">预览</span></div>
       {selected.url ? <div className="image-preview"><img src={selected.url} alt={selected.name} /></div>
@@ -394,8 +396,8 @@ function FileTool({ data, set, chat, project, attach, api, visible: paneVisible,
             onClick={() => onAttachmentPreview?.(selected.attachment)}>预览原文件</button>
             : <p className="muted">该演示附件只有名称。</p>}
       <div className="tool-action-row">
-        <button className="secondary" onClick={() => attach(selected.name)}><Icon name="attach" size={15} />在会话中使用</button>
-        {downloadHref && <a className="secondary tool-download" href={downloadHref} download={downloadName}><Icon name="download" size={15} />下载</a>}
+        <button className="secondary" onClick={() => attach(selected.name)}><Icon name="attach" size={/* @ai-token sys.icon.size.15 */ 15} />在会话中使用</button>
+        {downloadHref && <a className="secondary tool-download" href={downloadHref} download={downloadName}><Icon name="download" size={/* @ai-token sys.icon.size.15 */ 15} />下载</a>}
       </div>
     </section>}
   </div>
@@ -510,12 +512,12 @@ function GitTool({ data, set, updateEdits, project, report, chat, api, visible: 
       <div className="tool-segments" aria-label="Git 变更范围">{['全部', '未暂存', '已暂存'].map(item =>
         <button key={item} aria-pressed={filter === item} onClick={() => set('gitFilter', item)}>{item}</button>)}</div>
       <ul className="tool-file-list">{visible.map(change => <li key={change.path}><button aria-pressed={selected?.path === change.path}
-        onClick={() => set('gitSelected', change.path)}><Icon name="file" size={16} /><span>{change.path}</span><small>{change.summary}</small></button></li>)}</ul>
+        onClick={() => set('gitSelected', change.path)}><Icon name="file" size={/* @ai-token sys.icon.size.16 */ 16} /><span>{change.path}</span><small>{change.summary}</small></button></li>)}</ul>
       {selected ? <section className="tool-file-preview" aria-label="Git 差异">
         <div className="tool-title"><strong>{selected.path}</strong><button className="secondary" onClick={toggleStage}>{staged ? '取消暂存' : '暂存'}</button></div>
         <pre className="git-patch">{selected.patch.map((line, index) => <span key={index} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''}>{line + '\n'}</span>)}</pre>
       </section> : <p className="muted">此范围暂无变更。</p>}
-    </> : <div className="tool-empty"><Icon name="git" size={30} /><h3>打开项目以查看变更</h3></div>}
+    </> : <div className="tool-empty"><Icon name="git" size={/* @ai-token sys.icon.size.30 */ 30} /><h3>打开项目以查看变更</h3></div>}
   </div>
 }
 
@@ -661,7 +663,7 @@ function VideoEditTool({ data, set, chat, api, refresh, saveArtifact, report, pr
   return <div className="tool-home tool-detail">
     <header className="tool-detail-header"><div><h3>剪辑工具</h3><p>本地时间轴与供应商视频编辑</p></div><span className="tool-badge">样例</span></header>
     <div className="clip-preview" style={{ '--clip-position': data.elapsed / 15 }} aria-label="演示画面">
-      <Icon name="movie" size={27} /><output>{clipTime(data.elapsed)} / 00:15</output>
+      <Icon name="movie" size={/* @ai-token sys.icon.size.27 */ 27} /><output>{clipTime(data.elapsed)} / 00:15</output>
     </div>
     <label className="range-label">进度<input type="range" min="0" max="15" value={data.elapsed}
       onChange={event => set('elapsed', Number(event.target.value))} /></label>

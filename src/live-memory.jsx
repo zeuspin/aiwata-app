@@ -76,7 +76,7 @@ export default function LiveMemory({ record, selected, profile, setProfile, live
       </Panel>}
       <Panel title="学习记录" description="按 Profile 查看工作记忆、用户偏好和学到的技能。"
         actions={selected !== 'skill' && <button disabled={data.manualAddAvailable === false} title={data.manualAddAvailable === false ? '此原生接口尚未提供手动添加记忆' : undefined} className="secondary" onClick={() => setDialog({ kind: 'add' })}>
-          <Icon name="add" size={15} />添加记忆
+          <Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />添加记忆
         </button>}>
         {nodes.length ? nodes.map(node => <Entry key={node.id} icon={memoryTypes[node.type].icon}
           title={node.title} subtitle={memoryTypes[node.type].source}>

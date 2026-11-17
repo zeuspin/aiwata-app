@@ -1,5 +1,6 @@
+import { designValue } from './design/aiwata-tokens.mjs'
 // Original Desktop terminal-font/clipboard/links/terminal-drop contracts.
-export const DEFAULT_TERMINAL_FONT_FAMILY = "'JetBrains Mono', 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace"
+export const DEFAULT_TERMINAL_FONT_FAMILY = designValue('comp.terminal.font-family')
 export function resolveTerminalFontFamily(value) {
   const text=typeof value==='string'?value.trim():''
   if(!text)return DEFAULT_TERMINAL_FONT_FAMILY

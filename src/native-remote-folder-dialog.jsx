@@ -16,7 +16,7 @@ function RemoteFolderSelection({ controller, state }) {
     <p>当前目录：{state.path}</p>
     {state.loading && <p role="status">正在读取远端目录…</p>}
     {state.error && <p role="alert" className="management-error">{state.error}</p>}
-    <div className="management-panel" style={{maxHeight:240,overflow:'auto'}}>
+    <div className="management-panel" style={{maxHeight:"var(--ai-comp-workbench-native-remote-folder-dialog-remotefolderselection-maxheight)",overflow:'auto'}}>
       {state.entries?.map(entry=><button key={entry.path} type="button" className="management-back" onClick={()=>{setPath(entry.path);void controller.open(entry.path)}}>{entry.name}/</button>)}
       {!state.loading && !state.entries?.length && <p>没有子目录。</p>}
     </div>

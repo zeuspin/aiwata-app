@@ -1,3 +1,4 @@
+import { onDesignThemeChange, readDesignColor, readDesignValue } from './design/theme-runtime.mjs'
 import { driver } from './vendor/aiwata-tour/driver.js.mjs'
 import { runTourEngine } from './vendor/aiwata-tour/engine.mjs'
 import { collectTourTargets } from './vendor/aiwata-tour/collect-targets.mjs'
@@ -16,10 +17,24 @@ export function tourAction(params) {
 }
 export function createAppTour(doc, host) {
   const holder = {}
+  const presentation = () => ({
+    overlayColor: readDesignColor(doc.documentElement, 'comp.tour.overlay-color'),
+    ...Object.fromEntries(['overlayOpacity', 'stagePadding', 'stageRadius', 'popoverOffset'].map(key => [key, Number.parseFloat(readDesignValue(doc.documentElement, 'comp.tour.' + key.replace(/[A-Z]/g, letter => '-' + letter.toLowerCase())))])),
+  })
+  const releaseTheme = onDesignThemeChange(doc.documentElement, () => {
+    if (!holder.driver?.isActive()) return
+    const next = presentation()
+    holder.driver.setConfig({ ...holder.driver.getConfig(), ...next })
+    const overlay = doc.querySelector('svg.driver-overlay path')
+    if (overlay) { overlay.style.fill = next.overlayColor; overlay.style.opacity = String(next.overlayOpacity) }
+    holder.driver.refresh()
+  })
   return {
     run(params) { return runTourEngine(driver, holder, tourAction(params), collectTourTargets, doc, {
+      ...presentation(),
       animate: !doc.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches,
     }, host) },
+    dispose() { this.stop(); releaseTheme() },
     stop() { holder.driver?.destroy(); holder.release?.(); holder.driver = undefined; holder.release = undefined },
   }
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { editBrowserAnnotation, emptyAnnotationDraft, emptyBrowserState, saveBrowserAnnotation } from './tool-surfaces.mjs'
 import { annotationDestination, nextBrowserAnnotationNumber, pendingBrowserAnnotations } from './browser-annotation-state.mjs'
 import { Icon, IconButton } from './icons.jsx'
@@ -23,12 +23,21 @@ export function AnnotationImage({ image, chatId, api, number }) {
     }).catch(() => {})
     return () => { current = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [api, chatId, image?.blobId])
-  useEffect(() => { if (expanded) preview.current?.showModal() }, [expanded])
+  useLayoutEffect(() => {
+    if (!expanded) return
+    const modal = preview.current
+    modal.showModal()
+    return () => modal.close()
+  }, [expanded])
+  function closePreview() {
+    preview.current.close()
+    setExpanded(false)
+  }
   if (!image) return null
   return source ? <><button type="button" className="annotation-image" onClick={() => setExpanded(true)} aria-label={'查看批注 ' + number + ' 的标记截图'}>
     <img src={source} alt={'批注 ' + number + ' 的蓝色标记截图'} />
-  </button>{expanded && <dialog className="annotation-image-preview" ref={preview} aria-label={'批注 ' + number + ' 截图'} onCancel={() => setExpanded(false)}>
-    <header><strong>批注 {number}</strong><IconButton icon="close" label="关闭标注截图" onClick={() => setExpanded(false)} /></header>
+  </button>{expanded && <dialog className="annotation-image-preview" ref={preview} aria-label={'批注 ' + number + ' 截图'} onCancel={event => { event.preventDefault(); closePreview() }}>
+    <header><strong>批注 {number}</strong><IconButton icon="close" label="关闭标注截图" onClick={closePreview} /></header>
     <img src={source} alt={'批注 ' + number + ' 的蓝色标记截图'} />
   </dialog>}</> : <small className="muted">正在读取标注截图…</small>
 }
@@ -58,9 +67,9 @@ export function NativeAnnotationCard({ left, top, number, note, onChange, onSave
     <button type="button" className={'annotation-microphone' + (voice === 'recording' ? ' recording' : '')}
       aria-label={voice === 'recording' ? '完成录音并转写' : '语音输入批注'} title={voice === 'recording' ? '完成录音并转写' : '语音输入批注'}
       disabled={!!voice && voice !== 'recording'} onClick={() => voice === 'recording' ? void dictation.finish() : void dictation.start()}>
-      <Icon name={voice === 'recording' ? 'stop' : 'mic'} size={16} /></button>
-    {voice ? <button type="button" aria-label="取消语音输入" title="取消语音输入" onClick={() => dictation.cancel()}><Icon name="close" size={14} /></button>
-      : <button type="submit" className="annotation-save" aria-label="保存" title="保存" disabled={!note.trim()}><Icon name="tick" size={18} /></button>}
+      <Icon name={voice === 'recording' ? 'stop' : 'mic'} size={/* @ai-token sys.icon.size.16 */ 16} /></button>
+    {voice ? <button type="button" aria-label="取消语音输入" title="取消语音输入" onClick={() => dictation.cancel()}><Icon name="close" size={/* @ai-token sys.icon.size.14 */ 14} /></button>
+      : <button type="submit" className="annotation-save" aria-label="保存" title="保存" disabled={!note.trim()}><Icon name="tick" size={/* @ai-token sys.icon.size.18 */ 18} /></button>}
   </form>
 }
 
@@ -110,7 +119,7 @@ export function AnnotationControls({ pane, count, hidden, onHidden, onClear, onS
           event.preventDefault()
           setPosition({ left: placed.left + (event.key === 'ArrowLeft' ? -16 : event.key === 'ArrowRight' ? 16 : 0),
             top: placed.top + (event.key === 'ArrowUp' ? -16 : event.key === 'ArrowDown' ? 16 : 0) })
-        }}><Icon name="grip" size={15} /></button>
+        }}><Icon name="grip" size={/* @ai-token sys.icon.size.15 */ 15} /></button>
       <span className="annotation-control-count">{hidden ? '已隐藏' : ready ? '正在批注' : '准备中'} · {count}</span>
       <IconButton icon={hidden ? 'eye' : 'eyeOff'} label={hidden ? '显示标注' : '隐藏标注'} aria-pressed={hidden} onClick={onHidden} />
       <IconButton icon="trash" label="清空本页待发送标注" disabled={!count || busy} onClick={onClear} />

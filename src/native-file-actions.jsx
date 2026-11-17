@@ -37,7 +37,7 @@ export function NativeFileDialog({controller}) {
  if(mode==='trash')return <Confirm title={'将 '+entry.name+' 移到废纸篓？'} submit="移到废纸篓" onClose={close} onConfirm={()=>execute('trash')}>文件将由原生系统废纸篓保管。{error&&<p role="alert" className="management-error">{error}</p>}</Confirm>
  return <Dialog title={'编辑 '+entry.name} onClose={close} submit="保存" onSubmit={()=>execute('write',{content:draft,expectedText:baseline})}>
    <p className="muted">{location}</p>
-   <textarea aria-label="文件文本" value={draft} onChange={event=>controller.change(event.target.value)} style={{width:'100%',minHeight:350,fontFamily:'monospace'}} />
+   <textarea aria-label="文件文本" value={draft} onChange={event=>controller.change(event.target.value)} style={{width:'100%',minHeight:"var(--ai-comp-workbench-native-file-actions-nativefiledialog-minheight)",fontFamily:"var(--ai-comp-workbench-native-file-actions-nativefiledialog-fontfamily)"}} />
    {error&&<p role="alert" className="management-error">{error}</p>}
  </Dialog>
 }

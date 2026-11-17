@@ -62,7 +62,7 @@ function ProjectSettings({ selected, record, management, api, persist, commit, o
         actions={<button className="secondary" onClick={() => setDialog({ kind: 'rename', project })}>重命名</button>} />
       <Panel title="工作目录" description="新会话默认使用主目录。"
         actions={<button className="secondary" onClick={addFolderDialog}>
-          <Icon name="add" size={15} />关联目录
+          <Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />关联目录
         </button>}>
         <Entry icon="openFolder" title={project.folder || '未设置主目录'} subtitle="主目录" />
         {otherFolders(project.id).map(folder => <Entry key={folder} icon="folder" title={folder} subtitle="附加目录">
@@ -93,7 +93,7 @@ function ProjectSettings({ selected, record, management, api, persist, commit, o
       {record.projects.map(item => <button type="button" key={item.id} className="management-entry project-settings-link"
         onClick={() => onSelectItem(item.id)}>
         <span className="entry-text"><strong>{item.name}</strong><small>{item.folder || '未设置主目录'}</small></span>
-        <Icon name="right" size={15} />
+        <Icon name="right" size={/* @ai-token sys.icon.size.15 */ 15} />
       </button>)}
     </div> : <Empty>暂无项目。可从项目侧栏新建。</Empty>}
     {dialog?.kind === 'rename' && <Dialog title="重命名项目" onClose={close} onSubmit={form => {
@@ -316,7 +316,7 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
           }}>
             <BotFace bot={draftBot} size="activity" still />
             <span><strong>{"编辑头像"}</strong><small>{avatarModeLabels[appearance.mode]}</small></span>
-            <Icon name="right" size={14} />
+            <Icon name="right" size={/* @ai-token sys.icon.size.14 */ 14} />
           </button>
           <Field label={"显示名称"} name="name" defaultValue={item?.name} placeholder={"例如 编辑助理"} maxLength={80} aria-required="true" autoFocus />
         </div>
@@ -583,8 +583,8 @@ function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManage
     description={selectedItem ? '设置仅作用于当前选中的 Bot 或群聊。' : '集中查找、创建和整理 Bot；具体能力在各自设置中调整。'}
     back={onNavigate && { label: '返回 Bot 与群聊', onClick: () => onNavigate('bots') }}
     actions={!selected && <>
-      <button className="secondary" onClick={() => void openGroup()}><Icon name="group" size={15} />{"新建群聊"}</button>
-      <button className="primary" disabled={opening} onClick={() => void openEditor()}><Icon name="add" size={15} />{"新建 Bot"}</button>
+      <button className="secondary" onClick={() => void openGroup()}><Icon name="group" size={/* @ai-token sys.icon.size.15 */ 15} />{"新建群聊"}</button>
+      <button className="primary" disabled={opening} onClick={() => void openEditor()}><Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />{"新建 Bot"}</button>
     </>}>
     {selected ? detail ?? <Empty>{"该 Bot 或群聊已移除。"}</Empty> : <>
       <div className="bot-manager-toolbar">
@@ -899,7 +899,7 @@ function Tasks({ record, selected, management, persist, api, report, openGroups,
         <option value="">所有 Profile</option><option value={defaultProfile}>默认 Profile</option>
         {record.bots.map(bot => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
       </select></label>
-      <button className="primary" onClick={() => setDialog({ kind: 'edit' })}><Icon name="add" size={15} />新建任务</button>
+      <button className="primary" onClick={() => setDialog({ kind: 'edit' })}><Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />新建任务</button>
     </>}>
     {loadState && live && <p role="alert" className="management-error">{loadState}</p>}
     {tasks.length ? tasks.map(task => {
@@ -1099,7 +1099,7 @@ function Skills({ record, management, selected, persist, onSelectItem, profile, 
   return <Frame live={live} icon="spark" title="技能工具" description="按 Profile 浏览技能目录、安装技能和管理加载状态。"
     actions={<>
       <Profiles bots={record.bots} label="管理 Profile" value={profile} onChange={event => { close(); setProfile(event.target.value) }} />
-      {live && installed && <button className="primary" onClick={() => setDialog({ kind: 'create' })}><Icon name="add" size={15} />新建技能</button>}
+      {live && installed && <button className="primary" onClick={() => setDialog({ kind: 'create' })}><Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />新建技能</button>}
     </>}>
     <div className="management-toolbar">
       <div className="management-tabs" aria-label="技能列表">
@@ -1111,7 +1111,7 @@ function Skills({ record, management, selected, persist, onSelectItem, profile, 
     </div>
     <div className="management-skill-grid">
       {skills.map(skill => <article className="management-skill" key={skill.id}>
-        <div className="management-skill-title"><span className="entry-icon"><Icon name="spark" size={18} /></span>
+        <div className="management-skill-title"><span className="entry-icon"><Icon name="spark" size={/* @ai-token sys.icon.size.18 */ 18} /></span>
           <div><h3>{skill.name}</h3><small>{[skill.category, skill.source].filter(Boolean).join(' · ')}</small></div>
           <Badge tone={skill.installed && skill.enabled ? 'positive' : ''}>
             {skill.installed ? live && !installed ? '已安装' : skill.enabled ? '已启用' : '已停用' : '可安装'}
@@ -1123,11 +1123,11 @@ function Skills({ record, management, selected, persist, onSelectItem, profile, 
             ? <button className="secondary" onClick={() => { setView('installed'); onSelectItem?.('installed') }}>查看已安装</button>
             : <>
               <button className="secondary" onClick={() => setDialog({ kind: 'settings', skill })}>
-                <Icon name="settings" size={15} />技能设置
+                <Icon name="settings" size={/* @ai-token sys.icon.size.15 */ 15} />技能设置
               </button>
               {live && <button className="secondary" disabled={opening} onClick={() => void openContent(skill)}>查看内容</button>}
             </> : <button className="primary" onClick={() => setDialog({ kind: 'install', skill })}>
-              <Icon name="add" size={15} />安装
+              <Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />安装
             </button>}
         </div>
       </article>)}

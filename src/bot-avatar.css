@@ -1,5 +1,5 @@
 .bot-avatar {
-  --bot-size: 46px;
+  --bot-size: var(--ai-comp-workbench-bot-avatar-bot-avatar-bot-size);
   inline-size: var(--bot-size);
   block-size: var(--bot-size);
   display: inline-grid;
@@ -13,81 +13,81 @@
 .bot-avatar::before {
   content: '';
   position: absolute;
-  inset: 9%;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--bot-base) 23%, transparent), transparent 72%);
-  opacity: .54;
-  transition: opacity 200ms ease;
+  inset: var(--ai-comp-workbench-bot-avatar-bot-avatar-before-inset);
+  border-radius: var(--ai-comp-workbench-bot-avatar-bot-avatar-before-border-radius);
+  background: radial-gradient(circle, color-mix(in srgb, var(--bot-base) var(--ai-comp-workbench-bot-avatar-bot-avatar-before-background-size-1), transparent), transparent var(--ai-comp-workbench-bot-avatar-bot-avatar-before-background-size-2));
+  opacity: var(--ai-comp-workbench-bot-avatar-bot-avatar-before-opacity);
+  transition: var(--ai-comp-workbench-bot-avatar-bot-avatar-before-transition);
 }
 
-.bot-avatar-small { --bot-size: 24px; }
-.bot-avatar-activity { --bot-size: 36px; }
-.bot-avatar-preview { --bot-size: 64px; }
+.bot-avatar-small { --bot-size: var(--ai-comp-workbench-bot-avatar-bot-avatar-small-bot-size); }
+.bot-avatar-activity { --bot-size: var(--ai-comp-workbench-bot-avatar-bot-avatar-activity-bot-size); }
+.bot-avatar-preview { --bot-size: var(--ai-comp-workbench-bot-avatar-bot-avatar-preview-bot-size); }
 .group-face {
-  --group-face-size: 24px;
+  --group-face-size: var(--ai-comp-workbench-bot-avatar-group-face-group-face-size);
   display: inline-flex; align-items: center; justify-content: center;
   flex: none; min-inline-size: var(--group-face-size); isolation: isolate;
 }
-.group-face-large { --group-face-size: 32px; }
+.group-face-large { --group-face-size: var(--ai-comp-workbench-bot-avatar-group-face-large-group-face-size); }
 .group-face > .bot-avatar {
   --bot-size: var(--group-face-size);
-  border-radius: 50%; background: color-mix(in srgb, var(--bot-base) 22%, var(--surface));
+  border-radius: var(--ai-comp-workbench-bot-avatar-group-face-bot-avatar-border-radius); background: color-mix(in srgb, var(--bot-base) var(--ai-comp-workbench-bot-avatar-group-face-bot-avatar-background-size-1), var(--surface));
 }
 .group-user-avatar {
   display: inline-grid; place-items: center; flex: none;
   inline-size: calc(var(--group-face-size) * .78); block-size: calc(var(--group-face-size) * .78);
   margin-inline: calc(var(--group-face-size) * .11);
-  border-radius: 50%; background: var(--avatar, #677168); color: #fff;
-  font-size: calc(var(--group-face-size) * .4); font-weight: 600;
+  border-radius: var(--ai-comp-workbench-bot-avatar-group-user-avatar-border-radius); background: var(--avatar, var(--ai-comp-workbench-bot-avatar-group-user-avatar-background-color-1)); color: var(--ai-comp-workbench-bot-avatar-group-user-avatar-color);
+  font-size: calc(var(--group-face-size) * .4); font-weight: var(--ai-comp-workbench-bot-avatar-group-user-avatar-font-weight);
 }
 .group-face > :not(:first-child) { margin-inline-start: calc(var(--group-face-size) * -.42); }
-.group-face > :first-child { z-index: 3; }
-.group-face > :nth-child(2) { z-index: 2; }
+.group-face > :first-child { z-index: var(--ai-comp-workbench-bot-avatar-group-face-first-child-z-index); }
+.group-face > :nth-child(2) { z-index: var(--ai-comp-workbench-bot-avatar-group-face-nth-child-2-z-index); }
 .group-face > :nth-child(3) { z-index: 1; }
 .bot-avatar > svg { position: relative; display: block; inline-size: 100%; block-size: 100%; }
 .bot-avatar-photo {
   position: absolute;
-  inset: 15%;
-  border-radius: 35%;
+  inset: var(--ai-comp-workbench-bot-avatar-bot-avatar-photo-inset);
+  border-radius: var(--ai-comp-workbench-bot-avatar-bot-avatar-photo-border-radius);
   overflow: hidden;
   background: var(--sidebar);
 }
 .bot-avatar-photo > img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
-.bot-avatar-body, .bot-avatar-orbit { transform-origin: 32px 33px; }
-.bot-avatar-eyes { color: var(--bot-ink); transform-origin: 32px 34px; }
-.bot-portrait-head { transform-box: fill-box; transform-origin: 50% 68%; }
+.bot-avatar-body, .bot-avatar-orbit { transform-origin: var(--ai-comp-workbench-bot-avatar-bot-avatar-body-bot-avatar-orbit-transform-origin); }
+.bot-avatar-eyes { color: var(--bot-ink); transform-origin: var(--ai-comp-workbench-bot-avatar-bot-avatar-eyes-transform-origin); }
+.bot-portrait-head { transform-box: fill-box; transform-origin: var(--ai-comp-workbench-bot-avatar-bot-portrait-head-transform-origin); }
 .bot-portrait-eyes { transform-box: fill-box; transform-origin: center; }
-.bot-portrait-head .bot-avatar-idle-mouth { fill: #211d1e; }
-.bot-avatar[data-bot-state="thinking"] .bot-portrait-head { transform: rotate(-5deg); }
-.bot-avatar[data-bot-state="working"] .bot-portrait-head { animation: bot-working 1.1s ease-in-out infinite; }
-.bot-avatar[data-bot-state="waiting"] .bot-portrait-head { animation: bot-waiting .55s ease-out; }
-.bot-avatar[data-bot-state="done"] .bot-portrait-head { animation: bot-done .46s cubic-bezier(.2,.7,.3,1); }
+.bot-portrait-head .bot-avatar-idle-mouth { fill: var(--ai-comp-workbench-bot-avatar-bot-portrait-head-bot-avatar-idle-mouth-fill); }
+.bot-avatar[data-bot-state="thinking"] .bot-portrait-head { transform: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-thinking-bot-portrait-head-transform); }
+.bot-avatar[data-bot-state="working"] .bot-portrait-head { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-working-bot-portrait-head-animation); }
+.bot-avatar[data-bot-state="waiting"] .bot-portrait-head { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-waiting-bot-portrait-head-animation); }
+.bot-avatar[data-bot-state="done"] .bot-portrait-head { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-done-bot-portrait-head-animation); }
 .bot-avatar[data-bot-state="done"] .bot-portrait-eyes { transform: scaleY(.68); }
-.bot-avatar-eye-open { paint-order: stroke; stroke: var(--bot-outline); stroke-width: 1.15px; }
+.bot-avatar-eye-open { paint-order: stroke; stroke: var(--bot-outline); stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-eye-open-stroke-width); }
 .bot-avatar-orbit {
   opacity: 0;
-  color: color-mix(in srgb, var(--bot-base) 76%, var(--bot-ink));
+  color: color-mix(in srgb, var(--bot-base) var(--ai-comp-workbench-bot-avatar-bot-avatar-orbit-color-size-1), var(--bot-ink));
   stroke: currentColor;
-  stroke-width: 2.6px;
-  transition: opacity 180ms ease;
+  stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-orbit-stroke-width);
+  transition: var(--ai-comp-workbench-bot-avatar-bot-avatar-orbit-transition);
 }
 .bot-avatar[data-bot-avatar-mode="photo"][data-bot-state="thinking"] .bot-avatar-orbit {
-  opacity: .9; stroke-dasharray: 2 5; animation: bot-orbit 3.2s linear infinite;
+  opacity: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-avatar-mode-photo-data-bot-state-thinking-bot-avatar-orbit-opacity); stroke-dasharray: 2 5; animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-avatar-mode-photo-data-bot-state-thinking-bot-avatar-orbit-animation);
 }
-.bot-avatar-badge circle { stroke: var(--surface, #fafaf9); stroke-width: 2px; }
-.bot-avatar[data-bot-state="waiting"] .bot-avatar-badge circle { fill: #a66012; }
-.bot-avatar[data-bot-state="blocked"] .bot-avatar-badge circle { fill: #a73b35; }
-.bot-avatar[data-bot-state="done"] .bot-avatar-badge circle { fill: #2f7658; }
-.bot-avatar[data-bot-state="stopped"] .bot-avatar-badge circle { fill: #5b625d; }
+.bot-avatar-badge circle { stroke: var(--surface, var(--ai-comp-workbench-bot-avatar-bot-avatar-badge-circle-stroke-color-1)); stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-badge-circle-stroke-width); }
+.bot-avatar[data-bot-state="waiting"] .bot-avatar-badge circle { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-waiting-bot-avatar-badge-circle-fill); }
+.bot-avatar[data-bot-state="blocked"] .bot-avatar-badge circle { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-blocked-bot-avatar-badge-circle-fill); }
+.bot-avatar[data-bot-state="done"] .bot-avatar-badge circle { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-done-bot-avatar-badge-circle-fill); }
+.bot-avatar[data-bot-state="stopped"] .bot-avatar-badge circle { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-stopped-bot-avatar-badge-circle-fill); }
 
 .bot-avatar[data-bot-state="idle"]:not([data-bot-still]) .bot-avatar-eyes {
-  animation: bot-blink 8.6s var(--bot-delay) infinite;
+  animation: bot-blink var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-idle-not-data-bot-still-bot-avatar-eyes-animation-size-1) var(--bot-delay) infinite;
 }
 .bot-avatar[data-bot-state="idle"] {
-  --bot-idle-cycle: 8s;
+  --bot-idle-cycle: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-idle-bot-idle-cycle);
   --bot-idle-delay: var(--bot-delay);
 }
-.bot-avatar-preview[data-bot-state="idle"] { --bot-idle-delay: 0s; }
+.bot-avatar-preview[data-bot-state="idle"] { --bot-idle-delay: var(--ai-comp-workbench-bot-avatar-bot-avatar-preview-data-bot-state-idle-bot-idle-delay); }
 .bot-avatar-idle-mouth {
   fill: var(--bot-ink);
   transform-box: fill-box;
@@ -95,72 +95,72 @@
   animation: bot-idle-mouth var(--bot-idle-cycle) var(--bot-idle-delay) ease-in-out infinite;
 }
 .bot-avatar-idle-note {
-  fill: #476b62;
-  stroke: #faf9f5;
-  stroke-width: 1.5px;
+  fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-idle-note-fill);
+  stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-idle-note-stroke);
+  stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-idle-note-stroke-width);
   stroke-linejoin: round;
   animation: bot-idle-whistle var(--bot-idle-cycle) var(--bot-idle-delay) ease-out infinite;
 }
 .bot-avatar-gum {
   opacity: 0;
   transform-box: fill-box;
-  transform-origin: 35% 58%;
+  transform-origin: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-transform-origin);
   animation: bot-idle-bubble var(--bot-idle-cycle) var(--bot-idle-delay) ease-out infinite;
 }
-.bot-avatar-gum circle { fill: #f6a9be; stroke: #9c4364; stroke-width: 1.7px; }
-.bot-avatar-gum path { fill: none; stroke: #fff4fa; stroke-width: 2px; stroke-linecap: round; }
+.bot-avatar-gum circle { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-circle-fill); stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-circle-stroke); stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-circle-stroke-width); }
+.bot-avatar-gum path { fill: none; stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-path-stroke); stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-path-stroke-width); stroke-linecap: round; }
 .bot-avatar-gum-pop {
   fill: none;
   opacity: 0;
-  stroke: #ac5274;
-  stroke-width: 2.2px;
+  stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-pop-stroke);
+  stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-gum-pop-stroke-width);
   stroke-linecap: round;
   transform-box: fill-box;
   transform-origin: center;
   animation: bot-idle-pop var(--bot-idle-cycle) var(--bot-idle-delay) ease-out infinite;
 }
-.bot-avatar[data-bot-state="thinking"] { --bot-idea-cycle: 3.2s; }
-.bot-avatar[data-bot-state="thinking"] .bot-avatar-body { transform: rotate(-8deg); }
+.bot-avatar[data-bot-state="thinking"] { --bot-idea-cycle: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-thinking-bot-idea-cycle); }
+.bot-avatar[data-bot-state="thinking"] .bot-avatar-body { transform: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-thinking-bot-avatar-body-transform); }
 .bot-avatar[data-bot-state="thinking"] .bot-avatar-eyes {
-  transform: translate(3px, -4px);
+  transform: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-thinking-bot-avatar-eyes-transform);
   animation: bot-ponder var(--bot-idea-cycle) ease-in-out infinite;
 }
 .bot-avatar-bulb {
-  transform-origin: 48px 21px;
+  transform-origin: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-transform-origin);
   animation: bot-idea-rise var(--bot-idea-cycle) ease-in-out infinite;
 }
 .bot-avatar-bulb-glass {
-  fill: #ffe48b;
-  stroke: #694310;
-  stroke-width: 2.1px;
+  fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-glass-fill);
+  stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-glass-stroke);
+  stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-glass-stroke-width);
   animation: bot-idea-light var(--bot-idea-cycle) linear infinite;
 }
 .bot-avatar-bulb-rays {
-  stroke: #ad6615;
-  stroke-width: 2px;
+  stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-rays-stroke);
+  stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-rays-stroke-width);
   animation: bot-idea-rays var(--bot-idea-cycle) ease-out infinite;
 }
-.bot-avatar-bulb-filament { stroke: #88530f; stroke-width: 1.7px; }
-.bot-avatar-bulb-base { fill: #684f37; }
+.bot-avatar-bulb-filament { stroke: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-filament-stroke); stroke-width: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-filament-stroke-width); }
+.bot-avatar-bulb-base { fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-base-fill); }
 .bot-avatar-bulb-shards path {
-  fill: #efaf37;
+  fill: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-fill);
   opacity: 0;
-  transform-origin: 48px 13px;
+  transform-origin: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-transform-origin);
   animation: bot-idea-break var(--bot-idea-cycle) ease-out infinite;
 }
-.bot-avatar-bulb-shards path:nth-child(1) { --shard-x: -9px; --shard-y: -5px; --shard-turn: -50deg; }
-.bot-avatar-bulb-shards path:nth-child(2) { --shard-x: 8px; --shard-y: -7px; --shard-turn: 48deg; }
-.bot-avatar-bulb-shards path:nth-child(3) { --shard-x: -8px; --shard-y: 7px; --shard-turn: 56deg; }
-.bot-avatar-bulb-shards path:nth-child(4) { --shard-x: 6px; --shard-y: 7px; --shard-turn: -60deg; }
+.bot-avatar-bulb-shards path:nth-child(1) { --shard-x: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-1-shard-x); --shard-y: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-1-shard-y); --shard-turn: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-1-shard-turn); }
+.bot-avatar-bulb-shards path:nth-child(2) { --shard-x: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-2-shard-x); --shard-y: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-2-shard-y); --shard-turn: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-2-shard-turn); }
+.bot-avatar-bulb-shards path:nth-child(3) { --shard-x: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-3-shard-x); --shard-y: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-3-shard-y); --shard-turn: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-3-shard-turn); }
+.bot-avatar-bulb-shards path:nth-child(4) { --shard-x: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-4-shard-x); --shard-y: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-4-shard-y); --shard-turn: var(--ai-comp-workbench-bot-avatar-bot-avatar-bulb-shards-path-nth-child-4-shard-turn); }
 .bot-avatar[data-bot-state="working"]::before { opacity: 1; }
 .bot-avatar[data-bot-state="working"] .bot-avatar-orbit {
-  opacity: .94;
-  animation: bot-orbit 1.65s linear infinite;
+  opacity: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-working-bot-avatar-orbit-opacity);
+  animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-working-bot-avatar-orbit-animation);
 }
-.bot-avatar[data-bot-state="working"] .bot-avatar-body { animation: bot-working 1.1s ease-in-out infinite; }
+.bot-avatar[data-bot-state="working"] .bot-avatar-body { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-working-bot-avatar-body-animation); }
 .bot-avatar[data-bot-state="working"] .bot-avatar-eyes { transform: scaleY(.8); }
-.bot-avatar[data-bot-state="waiting"] .bot-avatar-body { animation: bot-waiting .55s ease-out; }
-.bot-avatar[data-bot-state="done"] .bot-avatar-body { animation: bot-done .46s cubic-bezier(.2,.7,.3,1); }
+.bot-avatar[data-bot-state="waiting"] .bot-avatar-body { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-waiting-bot-avatar-body-animation); }
+.bot-avatar[data-bot-state="done"] .bot-avatar-body { animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-state-done-bot-avatar-body-animation); }
 
 @keyframes bot-blink {
   0%, 88%, 92%, 100% { transform: scaleY(1); }
@@ -171,21 +171,21 @@
   25%, 33%, 41%, 49% { transform: scale(1.15, .42); opacity: 1; }
   29%, 37%, 45%, 53% { transform: scale(.76, .95); opacity: 1; }
   57%, 77% { transform: scale(.84); opacity: 1; }
-  83%, 96% { transform: scale(.8, .3); opacity: .55; }
+  83%, 96% { transform: scale(.8, .3); opacity: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-mouth-83-96-opacity); }
   100% { transform: scale(.9, 1); opacity: 1; }
 }
 @keyframes bot-idle-whistle {
-  0%, 23%, 100% { transform: translate(-3px, 5px); opacity: 0; }
-  5% { transform: translate(0, 3px); opacity: 1; }
-  18% { transform: translate(3px, -1px); opacity: 1; }
-  22% { transform: translate(4px, -3px); opacity: 0; }
+  0%, 23%, 100% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-whistle-0-23-100-transform); opacity: 0; }
+  5% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-whistle-5-transform); opacity: 1; }
+  18% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-whistle-18-transform); opacity: 1; }
+  22% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-whistle-22-transform); opacity: 0; }
 }
 @keyframes bot-idle-bubble {
   0%, 54% { transform: scale(.12); opacity: 0; }
   58% { transform: scale(.35); opacity: 1; }
-  73% { transform: translate(2px, -3px) scale(1.1); opacity: 1; }
-  78% { transform: translate(2px, -3px) scale(1.18); opacity: 1; }
-  80%, 100% { transform: translate(2px, -3px) scale(1.2); opacity: 0; }
+  73% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-bubble-73-transform); opacity: 1; }
+  78% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-bubble-78-transform); opacity: 1; }
+  80%, 100% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idle-bubble-80-100-transform); opacity: 0; }
 }
 @keyframes bot-idle-pop {
   0%, 78% { transform: scale(.65); opacity: 0; }
@@ -193,19 +193,19 @@
   86%, 100% { transform: scale(1.22); opacity: 0; }
 }
 @keyframes bot-ponder {
-  0%, 10%, 100% { transform: translate(0, -1px) scaleY(.84); }
-  25%, 74% { transform: translate(3px, -4px); }
-  93% { transform: translate(0, -1px) scaleY(.84); }
+  0%, 10%, 100% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-ponder-0-10-100-transform); }
+  25%, 74% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-ponder-25-74-transform); }
+  93% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-ponder-93-transform); }
 }
 @keyframes bot-idea-rise {
-  0%, 8% { opacity: 0; transform: translateY(6px) scale(.6); }
+  0%, 8% { opacity: 0; transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idea-rise-0-8-transform); }
   21%, 69% { opacity: 1; transform: none; }
   73% { opacity: 1; transform: scale(1.1); }
   77%, 100% { opacity: 0; transform: scale(.75); }
 }
 @keyframes bot-idea-light {
-  0%, 36% { fill: #f2eee7; }
-  43%, 100% { fill: #ffe48b; }
+  0%, 36% { fill: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idea-light-0-36-fill); }
+  43%, 100% { fill: var(--ai-comp-workbench-bot-avatar-keyframes-bot-idea-light-43-100-fill); }
 }
 @keyframes bot-idea-rays {
   0%, 36% { opacity: 0; }
@@ -217,18 +217,18 @@
   77% { opacity: 1; }
   94%, 100% { opacity: 0; transform: translate(var(--shard-x), var(--shard-y)) rotate(var(--shard-turn)) scale(.35); }
 }
-@keyframes bot-orbit { to { transform: rotate(360deg); } }
+@keyframes bot-orbit { to { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-orbit-to-transform); } }
 @keyframes bot-working {
-  0%, 100% { transform: rotate(-6deg) translateY(0); }
-  50% { transform: rotate(6deg) translateY(-2px); }
+  0%, 100% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-working-0-100-transform); }
+  50% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-working-50-transform); }
 }
 @keyframes bot-waiting {
-  from { transform: rotate(8deg) scale(1.05); }
+  from { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-waiting-from-transform); }
   to { transform: rotate(0); }
 }
 @keyframes bot-done {
   0% { transform: scale(.92); }
-  45% { transform: translateY(-2px) scale(1.1); }
+  45% { transform: var(--ai-comp-workbench-bot-avatar-keyframes-bot-done-45-transform); }
   100% { transform: none; }
 }
 
@@ -247,14 +247,14 @@
 .bot-avatar[data-bot-interactive]::before { display: none; }
 .bot-avatar[data-bot-interactive] :is(.bot-avatar-body, .bot-portrait-head) {
   animation: none;
-  transform: rotate(var(--bot-lean, 0deg));
+  transform: rotate(var(--bot-lean, var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-interactive-is-bot-avatar-body-bot-portrait-head-transform-size-1)));
 }
 .bot-avatar[data-bot-interactive] .bot-avatar-eyes {
   animation: none !important;
-  transform: translate(var(--bot-look-x, 0px), var(--bot-look-y, 0px)) scaleY(var(--bot-blink, 1));
+  transform: translate(var(--bot-look-x, var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-interactive-bot-avatar-eyes-transform-size-1)), var(--bot-look-y, var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-interactive-bot-avatar-eyes-transform-size-2))) scaleY(var(--bot-blink, 1));
 }
 .bot-avatar[data-bot-interactive][data-bot-state="thinking"] .bot-avatar-orbit {
-  opacity: .8; stroke-dasharray: 2 5; animation: bot-orbit 3.2s linear infinite;
+  opacity: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-interactive-data-bot-state-thinking-bot-avatar-orbit-opacity); stroke-dasharray: 2 5; animation: var(--ai-comp-workbench-bot-avatar-bot-avatar-data-bot-interactive-data-bot-state-thinking-bot-avatar-orbit-animation);
 }
 @media (prefers-reduced-motion: reduce), (hover: none), (pointer: coarse) {
   .bot-avatar[data-bot-interactive] :is(.bot-avatar-body, .bot-portrait-head, .bot-avatar-eyes) { transform: none; }
