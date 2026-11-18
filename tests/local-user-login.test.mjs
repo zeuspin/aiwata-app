@@ -31,6 +31,46 @@ test('failed registry read shows retry without fabricated defaults or activation
  assert.match(element.textContent,/登记损坏/);assert.ok(element.querySelector('[role="alert"]'))
  assert.equal(element.querySelectorAll('[aria-label^="进入"]').length,0)
 })
+test('failed native activation clears progress and enables the same user to retry', async t => {
+  let attempts = 0, rejectFirst
+  const firstAttempt = new Promise((_, reject) => { rejectFirst = reject })
+  const element = await mount(t, {
+    list: async () => ({ users: [{ id: 'one', name: '用户一' }] }),
+    activate: async () => ++attempts === 1 ? firstAttempt : { ok: true, opening: true },
+  })
+  const user = element.querySelector('[aria-label="进入用户一"]')
+  await click(user)
+  assert.equal(user.disabled, true)
+  assert.match(element.querySelector('[role="status"]').textContent, /正在打开/)
+  await act(async () => rejectFirst(Error('启动失败')))
+  assert.equal(user.disabled, false)
+  assert.match(element.querySelector('[role="alert"]').textContent, /启动失败/)
+  await click(user)
+  assert.equal(attempts, 2)
+  assert.equal(element.querySelector('[role="alert"]'), null)
+  assert.equal(element.querySelector('[role="status"]'), null)
+})
+test('native login shows startup steps in the selector, then restores it when startup fails', async t => {
+  let emit, reject
+  const activation = new Promise((_, fail) => { reject = fail })
+  const element = await mount(t, {
+    list: async () => ({ users: [{ id: 'one', name: '用户一' }] }),
+    activate: () => activation,
+    onStartupProgress: callback => { emit = callback; return () => { emit = undefined } },
+  })
+  await click(element.querySelector('[aria-label="进入用户一"]'))
+  assert.match(element.textContent, /正在准备工作环境/)
+  assert.match(element.querySelector('[aria-label="启动步骤"] li[aria-current="step"]').textContent, /准备本地运行环境/)
+  await act(async () => emit({ phase: 'backend.ready', progress: 94 }))
+  assert.equal(element.querySelector('progress').value, 94)
+  assert.match(element.querySelector('[aria-current="step"]').textContent, /启动并连接网关/)
+  await act(async () => emit({ phase: 'renderer.config', progress: 97 }))
+  assert.match(element.querySelector('[aria-current="step"]').textContent, /载入设置与会话/)
+  await act(async () => reject(Error('启动失败')))
+  assert.equal(element.querySelector('[role="alert"]').textContent, '启动失败')
+  assert.equal(element.querySelector('[aria-label="进入用户一"]').disabled, false)
+  assert.equal(emit, undefined)
+})
 test('deleting a user blocks focus refresh until its cleanup transaction has settled',async t=>{
  let resolveRemove,reads=0,users=[{id:'one',name:'用户一'}]
  const removing=new Promise(resolve=>resolveRemove=resolve)

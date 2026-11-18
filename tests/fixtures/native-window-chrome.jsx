@@ -5,6 +5,7 @@ import { createWorkspace } from '../../src/workspace.mjs'
 import { accounts } from '../../src/fixtures.mjs'
 import { bindNativeWindowChrome } from '../../src/native-window-chrome.mjs'
 import { NativeWindowFrame } from '../../src/native-window-chrome.jsx'
+import { DesktopLoadingScreen } from '../../src/startup-screens.jsx'
 import '../../src/styles.css'
 
 const mode = new URLSearchParams(location.search).get('platform') || 'mac'
@@ -27,14 +28,16 @@ const chrome = bindNativeWindowChrome({ host, element: document.documentElement,
 const state = { darwinMajor: mode === 'mac' ? 26 : 0, windowButtonPosition: mode === 'mac' ? { x: 12, y: 10 } : null, nativeOverlayWidth: mode === 'mac' ? 0 : 144, customWindowControls: mode === 'wslg' }
 chrome.prime(state)
 window.hermesDesktop = host
-window.aiwataNativeRuntime = { chrome }
+window.aiwataNativeChrome = chrome
 const storage = new Map()
 const api = createWorkspace({ getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) })
 api.login(accounts[0].id)
 function Fixture() {
   const [, refresh] = useReducer(value => value + 1, 0)
   const caption = useSyncExternalStore(chrome.subscribe, chrome.snapshot)
-  return <NativeWindowFrame>{phase ? <main className="login-screen"><section className="login-card"><h1>{phase === 'loading' ? '正在连接（测试）' : '连接失败（测试）'}</h1></section></main> : <Workbench account={accounts[0]} api={api} refresh={refresh} />}
+  return <NativeWindowFrame>{phase === 'loading' ? <DesktopLoadingScreen boot={{ phase: 'backend.runtime', progress: 20, message: '正在连接（测试）' }} />
+    : phase ? <main className="login-screen"><section className="login-card"><h1>连接失败（测试）</h1></section></main>
+      : <Workbench account={accounts[0]} api={api} refresh={refresh} />}
     {!caption.fullscreen && mode !== 'wslg' && <div data-host-caption style={{ position: 'fixed', top: 0, left: mode === 'mac' ? 12 : undefined, right: mode === 'mac' ? undefined : 0, width: mode === 'mac' ? 60 : 144, height: 34, zIndex: 100, background: '#ffe6ce', pointerEvents: 'none', fontSize: 9 }}>模拟系统按钮</div>}
     <aside style={{ position: 'fixed', bottom: 2, right: 2, zIndex: 100, fontSize: 10, background: 'white' }}>布局测试：模拟 {mode} <output id="window-command" /> <button onClick={() => notify({ ...state, isFullscreen: !chrome.snapshot().fullscreen })}>模拟全屏切换</button></aside>
   </NativeWindowFrame>

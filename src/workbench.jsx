@@ -1088,10 +1088,12 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     return true
   }
 
-  function logout() {
-    api.logout()
-    onLogout?.()
-    refresh()
+  async function logout() {
+    try {
+      await onLogout?.()
+      api.logout()
+      refresh()
+    } catch (error) { report(error.message, true) }
   }
 
   useEffect(() => {

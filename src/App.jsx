@@ -8,6 +8,7 @@ import { Workbench } from './workbench.jsx'
 import { LocalUserLogin } from './local-user-login.jsx'
 import { createBrowserLocalUsers } from './local-users.mjs'
 import { connectLiveAiwata } from './live-aiwata.mjs'
+import { NativeStartupScreen } from './startup-screens.jsx'
 
 const native = window.aiwataNativeRuntime
 const live = Boolean(native) || __AIWATA_LIVE__
@@ -37,7 +38,7 @@ function WorkspaceApp({native,onManageConnections,selectedUser,onUserLogout}) {
   const accounts=native?.accounts ?? (selectedUser ? [selectedUser] : demoAccounts)
   const [workspace] = useState(() => {
     const api = createWorkspace(window.localStorage, createLocalAttachmentStore(window.indexedDB), { live, accounts, storageNamespace: native?.storageNamespace })
-    api.setOnline(navigator.onLine)
+    api.setOnline(live || navigator.onLine)
     return api
   })
   const [, refresh] = useReducer(version => version + 1, 0)
@@ -81,13 +82,13 @@ function WorkspaceApp({native,onManageConnections,selectedUser,onUserLogout}) {
     } finally { if(generation===lifetime.current){loginInProgress.current=false;setConnecting(false)} }
   }
 
-  function closeConnection() {
-    if (!live) { onUserLogout?.(); return }
+  async function closeConnection() {
+    await onUserLogout?.()
+    if (!live) return
     sessionStorage.removeItem(selectedAccountKey)
     void Promise.resolve(connection?.retire?.() ?? connection?.close()).catch(() => {})
     activeClient.current=null
     setConnection(null)
-    onUserLogout?.()
   }
 
   useEffect(() => {
@@ -112,6 +113,15 @@ function WorkspaceApp({native,onManageConnections,selectedUser,onUserLogout}) {
   }, [workspace, simulatedOffline])
 
   const account = accounts.find(item => item.id === workspace.accountId)
+  const ready = Boolean(account && connection)
+  const failed = Boolean(loginError) || native?.status === 'error' || native?.status === 'removed'
+  const startupStatus = native && (ready ? 'ready' : failed ? 'failed' : native.status === 'ready' ? 'loading' : null)
+  useEffect(() => {
+    if (startupStatus) void window.hermesDesktop?.localUsers?.reportWorkspace?.(startupStatus).catch(() => {})
+  }, [startupStatus])
+  if (native?.status === 'ready' && !ready && !loginError && (connecting || workspace.online)) {
+    return <NativeStartupScreen connecting />
+  }
   return account && (!live || connection)
     ? <Workbench key={account.id} account={account} api={workspace} live={connection} onLogout={closeConnection} onManageConnections={native ? onManageConnections : undefined} refresh={refresh} onOffline={() => setSimulatedOffline(true)} />
     : <main className="login-screen">

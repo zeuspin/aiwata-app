@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { Confirm } from './management-ui.jsx'
 import { localUserAppearance } from './local-users.mjs'
+import { DesktopLoadingScreen } from './startup-screens.jsx'
+import { desktopMilestone } from './startup-state.mjs'
+
+const startupMessages = ['正在准备本地运行环境。', '正在启动并连接网关。', '正在载入工作区设置与会话。', '正在打开工作台。']
 
 export function LocalUserLogin({ service, onSelected, demo = false }) {
   const [users, setUsers] = useState(null)
@@ -9,6 +13,7 @@ export function LocalUserLogin({ service, onSelected, demo = false }) {
   const [busy, setBusy] = useState(false)
   const [closing, setClosing] = useState(false)
   const [notice, setNotice] = useState('')
+  const [startup, setStartup] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [revision, setRevision] = useState(0)
   const lifetime = useRef(0), pending = useRef(false)
@@ -41,6 +46,7 @@ export function LocalUserLogin({ service, onSelected, demo = false }) {
     }
   }
   const locked = busy || closing
+  if (startup) return <DesktopLoadingScreen boot={{ ...startup, message: startupMessages[desktopMilestone(startup)] }} />
   return <main className="login-screen"><section className="login-card local-user-card" aria-labelledby="local-user-title">
     <img className="login-brand" src="./aiwata-app-icon.svg" alt="" />
     <h1 id="local-user-title">登录 AIWATA</h1>
@@ -50,11 +56,20 @@ export function LocalUserLogin({ service, onSelected, demo = false }) {
     {notice && <p role="status">{notice}</p>}
     <div className="account-choices">{users?.map(user => <div className="local-user-row" key={user.id}>
       <button type="button" className="local-user-select" aria-label={'进入' + user.name} disabled={locked} onClick={() => void run(async current => {
-        const result = await service.activate(user.id)
-        if (!current()) return
-        if (!result?.ok) throw new Error('无法进入此用户工作区。')
-        if (result.opening) setNotice('已请求打开 ' + user.name + ' 的独立工作区。')
-        else await onSelected?.(user)
+        if (service.onStartupProgress) setStartup({ phase: 'renderer.init', progress: 0 })
+        else setNotice('正在打开 ' + user.name + ' 的工作区…')
+        const stopProgress = service.onStartupProgress?.(value => {
+          if (current()) setStartup(previous => value.progress >= (previous?.progress ?? 0) ? value : previous)
+        })
+        try {
+          const result = await service.activate(user.id)
+          if (!current()) return
+          if (!result?.ok) throw new Error('无法进入此用户工作区。')
+          if (!result.opening) await onSelected?.(user)
+        } finally {
+          stopProgress?.()
+          if (current()) { setStartup(null); setNotice('') }
+        }
       })}>
         <span className="avatar" style={{ '--avatar': user.color }}>{user.initial}</span>
         <span>{user.name}<small>{demo ? '演示用户' : '本机虚拟用户'}</small></span><Icon name="right" size={/* @ai-token sys.icon.size.15 */ 15} />

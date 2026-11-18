@@ -7,9 +7,10 @@ export function nativeChromeLayout(state = {}, overlay = null, metrics = {}) {
   const mac = state.darwinMajor > 0 || (state.darwinMajor == null && state.platform === 'mac')
   let left = 0, right = 0
   if (!fullscreen) {
-    if (mac) left = (positive(state.windowButtonPosition?.x) ? state.windowButtonPosition.x : 12) + (metrics.macControlOffset ?? 74)
+    const zoom = positive(state.zoomFactor) && state.zoomFactor > 0 ? state.zoomFactor : 1
+    if (mac) left = Math.ceil(((positive(state.windowButtonPosition?.x) ? state.windowButtonPosition.x : 12) + (metrics.macControlOffset ?? 74)) / zoom)
     else if (!custom && overlay) ({ left, right } = overlay)
-    else right = positive(state.nativeOverlayWidth) ? state.nativeOverlayWidth : (metrics.overlayFallback ?? 144)
+    else right = Math.ceil((positive(state.nativeOverlayWidth) ? state.nativeOverlayWidth : (metrics.overlayFallback ?? 144)) / (custom ? 1 : zoom))
   }
   return { left, right, height, custom, maximized: state.isMaximized === true, fullscreen }
 }
@@ -19,7 +20,7 @@ function windowState(value = {}) {
   for (const key of ['isFullscreen', 'isMaximized', 'customWindowControls']) {
     if (typeof value[key] === 'boolean') out[key] = value[key]
   }
-  for (const key of ['darwinMajor', 'nativeOverlayWidth']) {
+  for (const key of ['darwinMajor', 'nativeOverlayWidth', 'zoomFactor']) {
     if (positive(value[key])) out[key] = value[key]
   }
   if (value.windowButtonPosition === null) out.windowButtonPosition = null
@@ -57,6 +58,10 @@ export function bindNativeWindowChrome({ host, element, environment = window, me
     receivedEvent = true
     state = { ...state, ...windowState(value) }; publish()
   })
+  function prime(value) {
+    if (value && !disposed && !receivedEvent) {state = { ...state, ...windowState(value) }; publish()}
+  }
+  void host.windowControls?.getState?.().then(prime).catch(() => {})
   overlay?.addEventListener('geometrychange', publish)
   environment.addEventListener('resize', publish)
   function dispose() {
@@ -73,7 +78,7 @@ export function bindNativeWindowChrome({ host, element, environment = window, me
   return {
     snapshot: () => snapshot,
     subscribe(callback) { subscribers.add(callback); return () => subscribers.delete(callback) },
-    prime(value) { if (!disposed && !receivedEvent) { state = { ...state, ...windowState(value) }; publish() } },
+    prime,
     dispose,
   }
 }

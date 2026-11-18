@@ -10,6 +10,7 @@ if (['quick', 'overlay', 'wake', 'hud'].includes(auxiliary)) {
 }
 const boot = auxiliary ? import('#native-auxiliary') : import('./primary-main.jsx')
 boot.catch(error => {
+  if (!auxiliary) void window.hermesDesktop?.localUsers?.reportWorkspace?.('failed').catch(() => {})
   const root = document.getElementById('root')
   root.setAttribute('role', 'alert')
   root.textContent = 'AIWATA 界面无法载入：' + error.message

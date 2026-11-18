@@ -5,7 +5,7 @@ const emptySubscribe = () => () => {}
 const emptySnapshot = () => emptyChrome
 
 export function NativeWindowControls() {
-  const chrome = window.aiwataNativeChrome ?? window.aiwataNativeRuntime?.chrome
+  const chrome = window.aiwataNativeChrome
   const state = useSyncExternalStore(chrome?.subscribe ?? emptySubscribe, chrome?.snapshot ?? emptySnapshot)
   const controls = window.hermesDesktop?.windowControls
   if (!state.custom || !controls) return null

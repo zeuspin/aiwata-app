@@ -29,8 +29,6 @@ export default defineConfig({
       '@aiwata/native-client': resolve(nativeSource, 'apps/desktop/src/api/client.ts'),
       '@aiwata/native-preview-scope': resolve(nativeSource, 'apps/desktop/electron/preview-guest-throttle.ts'),
       '@aiwata/native-protocol': resolve(nativeSource, 'apps/desktop/src/api/canonical-protocol.ts'),
-      '@aiwata/native-titlebar': resolve(nativeSource, 'apps/desktop/src/app/shell/titlebar.ts'),
-      '@aiwata/native-overlay': resolve(nativeSource, 'apps/desktop/electron/titlebar-overlay-width.ts'),
       '@hermes/shared': resolve(nativeSource, 'apps/shared/src'),
       nanostores: resolve(nativeSource, 'apps/desktop/node_modules/nanostores/index.js'),
     } : {}),

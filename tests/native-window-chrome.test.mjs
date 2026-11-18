@@ -2,13 +2,34 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { nativeChromeLayout, bindNativeWindowChrome } from '../src/native-window-chrome.mjs'
 
+test('initial host chrome is read before account or gateway state, and follows the latest update', async () => {
+  let notify, finish
+  const host = {
+    windowControls: { getState: () => new Promise(resolve => { finish = resolve }) },
+    onWindowStateChanged: callback => { notify = callback },
+  }
+  const environment = Object.assign(new EventTarget(), { navigator: { platform: 'MacIntel' } })
+  const chrome = bindNativeWindowChrome({ host, element: { dataset: {}, style: { setProperty() {}, removeProperty() {} } }, environment })
+  assert.equal(chrome.snapshot().left, 86)
+  assert.equal(typeof finish, 'function')
+  notify({ isFullscreen: true, darwinMajor: 25 })
+  finish({ isFullscreen: false, darwinMajor: 25, windowButtonPosition: { x: 20, y: 10 } })
+  await Promise.resolve()
+  assert.equal(chrome.snapshot().left, 0)
+  chrome.dispose()
+})
+
 test('native caption geometry follows host window state and both overlay edges', () => {
   assert.deepEqual(nativeChromeLayout({ darwinMajor: 26, windowButtonPosition: { x: 12, y: 10 } }),
     { left: 86, right: 0, height: 34, custom: false, maximized: false, fullscreen: false })
   assert.equal(nativeChromeLayout({ darwinMajor: 26, windowButtonPosition: { x: 20, y: 10 } }).left, 94)
+  assert.equal(nativeChromeLayout({ darwinMajor: 26, zoomFactor: 0.8 }).left, 108)
   assert.equal(nativeChromeLayout({ darwinMajor: 0, windowButtonPosition: null, nativeOverlayWidth: 144 }).right, 144)
   assert.equal(nativeChromeLayout({ darwinMajor: 0 }, { left: 0, right: 137 }).right, 137)
   assert.equal(nativeChromeLayout({ darwinMajor: 0 }, { left: 120, right: 0 }).left, 120)
+  assert.equal(nativeChromeLayout({ darwinMajor: 0, zoomFactor: 0.8 }, { left: 0, right: 137 }).right, 137)
+  assert.equal(nativeChromeLayout({ darwinMajor: 0, zoomFactor: 0.8 }).right, 180)
+  assert.equal(nativeChromeLayout({ darwinMajor: 0, zoomFactor: 0.8, customWindowControls: true }).right, 144)
   const full = nativeChromeLayout({ darwinMajor: 26, isFullscreen: true, customWindowControls: true })
   assert.equal(full.left, 0); assert.equal(full.right, 0); assert.equal(full.custom, false)
   assert.equal(nativeChromeLayout({ darwinMajor: 0, customWindowControls: true, isMaximized: true }).custom, true)

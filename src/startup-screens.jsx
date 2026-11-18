@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { desktopMilestone, desktopSteps, installProgress } from './startup-state.mjs'
 import './startup.css'
 
@@ -9,8 +9,10 @@ const stageLabels = {
 function StartupFrame({ label, preview, children }) {
   return <main className="startup-screen">
     <header className="startup-header">
-      <span><img src="./aiwata-app-icon.svg" alt="" />{label}</span>
-      {preview && <small>本地预览</small>}
+      <div className="startup-header-content">
+        <span><img src="./aiwata-app-icon.svg" alt="" />{label}</span>
+        {preview && <small>本地预览</small>}
+      </div>
     </header>
     <div className="startup-body">{children}</div>
   </main>
@@ -117,8 +119,24 @@ export function DesktopLoadingScreen({ boot, preview, onRetry, onOpenLogs, logs 
       </div>
       {boot.error && <div className="startup-loading-recovery">
         <p className="startup-error" role="alert">{boot.error}</p>
-        <button type="button" className="startup-primary" onClick={onRetry}>重试启动 <span aria-hidden="true">→</span></button>
+        {onRetry && <button type="button" className="startup-primary" onClick={onRetry}>重试启动 <span aria-hidden="true">→</span></button>}
       </div>}
     </section>
   </StartupFrame>
+}
+
+export function NativeStartupScreen({ connecting = false }) {
+  const [boot, setBoot] = useState(null)
+  useEffect(() => {
+    const host = window.hermesDesktop
+    let live = true, received = false
+    const off = host?.onBootProgress?.(value => { received = true; setBoot(value) })
+    void host?.getBootProgress?.().then(value => { if (live && !received) setBoot(value) }).catch(() => {})
+    return () => { live = false; off?.() }
+  }, [])
+  const progress = connecting && !boot?.error
+    ? { phase: 'renderer.config', progress: 97, message: '正在载入工作区设置与会话。' }
+    : boot?.phase && boot.phase !== 'idle' ? boot
+      : { phase: 'renderer.init', progress: 0, message: '正在初始化桌面界面。' }
+  return <DesktopLoadingScreen boot={progress} onRetry={() => location.reload()} />
 }
