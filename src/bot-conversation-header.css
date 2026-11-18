@@ -56,11 +56,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bot-conversation-header-compact .bot-presence-label {
-  padding: var(--ai-comp-workbench-bot-conversation-header-bot-conversation-header-compact-bot-presence-label-padding);
-  font-size: var(--ai-comp-workbench-bot-conversation-header-bot-conversation-header-compact-bot-presence-label-font-size);
-  background: transparent;
-}
 .bot-conversation-header-compact .room-member-list {
   justify-content: center;
   margin-top: var(--ai-comp-workbench-bot-conversation-header-bot-conversation-header-compact-room-member-list-margin-top);

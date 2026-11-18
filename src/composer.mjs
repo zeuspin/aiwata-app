@@ -12,9 +12,9 @@ export const models = [
 ]
 
 export const approvalModes = [
-  { id: 'manual', label: '手动审批', description: '执行需要审批的操作前询问' },
-  { id: 'smart', label: '智能审批', description: '自动评估需要审批的操作，并在需要时询问' },
-  { id: 'off', label: '关闭审批', description: '跳过审批提示，仍受运行环境权限约束' },
+  { id: 'manual', icon: 'approvalHand', label: '请求批准', description: '命中审批规则时询问' },
+  { id: 'smart', icon: 'approvalTerminal', label: '帮我批准', description: '由模型评估，必要时请你确认' },
+  { id: 'off', icon: 'approvalWarning', label: '关闭审批', description: '跳过常规审批，仍受系统权限约束' },
 ]
 
 const oldApprovalModes = { '请求批准': 'manual', '帮我批准': 'smart', '完全访问权限': 'off' }

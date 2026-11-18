@@ -2,9 +2,9 @@ import React, { useLayoutEffect, useRef, useState } from 'react'
 import { demoPrompts } from './agent-session.mjs'
 import { BotFace } from './bot-avatar.jsx'
 import { botPresence, botPresenceLabels, roomMemberPresence } from './bot-presence.mjs'
-import { botHandle } from './room.mjs'
 import { Icon } from './icons.jsx'
 import { hasPromptContent, isLocalAttachment } from './local-attachments.mjs'
+import { MentionText, MessageMarkdown, MessageSourceActions } from './message-markdown.jsx'
 import './agent-transcript.css'
 
 const taskStatus = { pending: '待处理', in_progress: '进行中', completed: '已完成', cancelled: '已取消' }
@@ -87,13 +87,6 @@ function WebPreviews({ previews, onOpen }) {
     </button>)}</div>
 }
 
-function MentionText({ text, members }) {
-  return text.split(/((?<![\p{L}\p{N}_.@-])@[\p{L}\p{N}_-]+)/gu).map((part, index) => {
-    const member = part.startsWith('@') && members.find(member => botHandle(member).toLowerCase() === part.slice(1).toLowerCase())
-    return member ? <span className="conversation-mention" title={part} key={index}>@{member.name}</span> : part
-  })
-}
-
 function SpeakerAvatar({ bot, name, user, account, active = false, animate = active, state = 'idle' }) {
   return <span className="conversation-avatar" role="img" aria-label={name + (active ? '正在回复' : '的头像')}>
     {user ? <span className="conversation-user-avatar" style={{ '--avatar': account?.color }}>{account?.initial || '你'}</span>
@@ -129,7 +122,8 @@ function Message({ message, index, bot, members, account, conversational, showAv
         : name}</React.Fragment>
     })}</div>}
     {message.role === 'agent' && <Activity turn={message} />}
-    {message.text && <p>{conversational ? <MentionText text={message.text} members={members} /> : message.text}</p>}
+    {message.text && (message.role === 'agent' ? <MessageMarkdown text={message.text} members={members.length ? members : undefined} />
+      : <p>{conversational ? <MentionText text={message.text} members={members} /> : message.text}</p>)}
     {conversational && message.memberId && /^[（(]\s*通过\s*[）)]$/.test(message.text?.trim() ?? '') &&
       <small className="conversation-reply-note" title="模型返回的原始文字；系统未将其判定为审批通过或验收通过。">Bot 原文，非验收状态</small>}
     {message.preview && <button type="button" className="secondary agent-preview-link"
@@ -145,6 +139,7 @@ function Message({ message, index, bot, members, account, conversational, showAv
       {message.reactions.map((reaction, position) => <span key={position} title={reaction.author === 'agent' ? 'Agent 表情' : '消息表情'}>{reaction.emoji}</span>)}
     </div>}
     {message.usage && <small className="agent-usage">{message.usage.input ?? message.usage.input_tokens ?? 0} 输入 · {message.usage.output ?? message.usage.output_tokens ?? 0} 输出 tokens</small>}
+    {message.role === 'agent' && message.text && <MessageSourceActions text={message.text} />}
     {!conversational && reply}
     </div>
     </div>
@@ -238,7 +233,7 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
           {bot && <header className="conversation-message-heading"><strong>{bot.name}</strong><small>{botPresenceLabels[botPresence(chat)]}</small></header>}
           <div className="message-body">
           {run && <Activity turn={run} />}
-          {run?.text && <p data-streaming="true">{run.text}</p>}
+          {run?.text && <MessageMarkdown text={run.text} streaming />}
           {run?.preview && <button className="secondary agent-preview-link" onClick={() => onPreview(run.preview)}>打开{run.preview.label || '预览'}</button>}
           <FilePreviews previews={run?.filePreviews} onOpen={onFilePreview} />
           <WebPreviews previews={run?.webPreviews} onOpen={onPreview} />

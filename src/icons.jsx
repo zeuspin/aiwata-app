@@ -65,6 +65,39 @@ function AiwataIcon({ size, selected = true }) {
   return <img className="aiwata-nav-icon" src={selected ? './aiwata-app-icon.svg' : './aiwata-app-icon-outline.svg'} alt="" width={size} height={size} />
 }
 
+function ApprovalGlyph({ kind, size, stroke, children, ...props }) {
+  return <svg {...props} data-approval-icon={kind} width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+}
+
+function ApprovalHand(props) {
+  return <ApprovalGlyph {...props} kind="hand">
+    <path d="M8 12.8V6.6a1.4 1.4 0 0 1 2.8 0v4.3V4.7a1.4 1.4 0 0 1 2.8 0v6.2V5.8a1.4 1.4 0 0 1 2.8 0v5.7-3a1.4 1.4 0 0 1 2.8 0v5.2c0 4.6-2.5 7.6-6.5 7.6-3 0-5-1.4-6.5-3.6l-2.3-3.5a1.5 1.5 0 0 1 2.4-1.8l2.5 2.6" />
+    <path d="M8.8 15c1-.1 2.2.4 2.8 1.4" />
+  </ApprovalGlyph>
+}
+
+function ApprovalShield({ children }) {
+  return <>
+    <path d="M10.8 3.3a3 3 0 0 1 2.4 0l5.7 2.5A2.2 2.2 0 0 1 20.2 8v4.4c0 4.2-3.3 7.1-7.4 8.7a2.3 2.3 0 0 1-1.6 0c-4.1-1.6-7.4-4.5-7.4-8.7V8a2.2 2.2 0 0 1 1.3-2.2z" />
+    {children}
+  </>
+}
+
+function ApprovalTerminal(props) {
+  return <ApprovalGlyph {...props} kind="terminal">
+    <ApprovalShield><path d="m8 10 2.4 2.3L8 14.6m5.1 0h2.9" /></ApprovalShield>
+  </ApprovalGlyph>
+}
+
+function ApprovalWarning(props) {
+  return <ApprovalGlyph {...props} kind="warning">
+    <ApprovalShield><path d="M12 8.2v4.5m0 3.2h.01" /></ApprovalShield>
+  </ApprovalGlyph>
+}
+
 const icons = {
   devices: IconDevices2, rotate: IconRotateClockwise,
   terminal: IconTerminal2, bug: IconBug, copy: IconCopy, git: IconGitBranch, reply: IconArrowBackUp, down: IconArrowDown, back: IconArrowLeft, next: IconArrowRight, send: IconArrowUp,
@@ -78,6 +111,7 @@ const icons = {
   attach: IconPaperclip, edit: IconPencil, photo: IconPhoto, retouch: IconPhotoEdit,
   add: IconPlus, comment: IconMessageCircle, annotate: IconClick, tick: IconCheck, eye: IconEye, eyeOff: IconEyeOff, grip: IconGripVertical, refresh: IconRefresh, bot: IconRobot, botChat: BotChatIcon, search: IconSearch,
   settings: IconSettings, shield: IconShield, spark: IconSparkles, stop: IconSquareFilled,
+  approvalHand: ApprovalHand, approvalTerminal: ApprovalTerminal, approvalWarning: ApprovalWarning,
   group: IconUsers, alert: IconAlertCircle, archive: IconArchive, download: IconDownload, tag: IconTag, trash: IconTrash, offline: IconWifiOff, close: IconX,
 }
 

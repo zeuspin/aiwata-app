@@ -148,6 +148,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const [menu, setMenu] = useState('')
   const [railPanel, setRailPanel] = useState(null)
   const [contextAction, setContextAction] = useState(null)
+  const [agentInspectorId, setAgentInspectorId] = useState(null)
+  const inspectedChat = record.chats[agentInspectorId]
   const [tabDialog, setTabDialog] = useState(null)
   const [transcriptVersion, setTranscriptVersion] = useState(0)
   const [creating, setCreating] = useState(false)
@@ -252,7 +254,6 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     }
   }, [live, api, account.id, refresh])
   useEffect(() => { nativePrimary.current?.publish() })
-  const connectedLabel = '已连接本机 AIWATA'
   const drag = useRef(null)
   const projectTrigger = useRef(null)
 
@@ -590,6 +591,10 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
       ],
       [
         { label: '导出', icon: 'download', run: () => exportConversation(session) },
+        ...(live && !sidebar && !session.gatewayRoom && !record.groups.some(group => group.id === id) ? [{
+          label: 'Agent 能力与任务', icon: 'settings', disabled: gateway.status !== 'connected' || !session.gatewayStoredId,
+          run: () => setAgentInspectorId(id),
+        }] : []),
         ...(managedChat ? [{
           label: '移动到项目…', icon: 'folder', disabled: !targets.length || busy,
           run: () => setTabDialog({ kind: 'move', id, title, anchor, targets }),
@@ -1304,9 +1309,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         {contextVisible && separator('left')}
       </div>
       {composerChat ? <main data-tour="composer" className="chat-pane" aria-label={group ? '群聊' : bot ? 'Bot 私聊' : draftChat ? '新建会话' : undefined} inert={replacesChat}>
-        {live && <p className="live-connection" role="status">{gateway.status === 'connected' ? connectedLabel
-          : gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</p>}
-        {live && !group && <LiveAgentInspector live={live} chat={composerChat} connected={gateway.status === 'connected'} />}
+        {live && gateway.status !== 'connected' && <p className="live-connection" role="status">
+          {gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</p>}
         {live && gateway.desktopRequests?.map(request => <DesktopRequestCard key={(request.profile ?? '') + ':' + request.id} request={request}
           onRespond={respondDesktopChoice} disabled={gateway.desktopRequestBusy === request.id} error={gateway.desktopRequestError} />)}
         {live && !group && composerChat.connectionRequest && <LiveConnectionRequest key={composerChat.id + ':' + composerChat.connectionRequest.op_id}
@@ -1370,7 +1374,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         <div className="welcome workspace-empty">
           <img className="welcome-banner" src="./aiwata-banner.svg" alt="AIWATA" />
           <h2>{section === 'bots' ? '选择一个 Bot 或群聊' : '打开一条会话开始工作'}</h2>
-          {live && <small role="status">{gateway.status === 'connected' ? connectedLabel : gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</small>}
+          {live && gateway.status !== 'connected' && <small role="status">
+            {gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</small>}
           {section === 'projects' && <button className="secondary" onClick={() => newChat()}><Icon name="add" />新聊天</button>}
           {section === 'bots' && <button className="secondary" onClick={() => manage('bot-settings')}>管理全部 Bot</button>}
         </div>
@@ -1428,6 +1433,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     <NativeUpdateDialog controller={nativePrimary.current?.updates} />
     <NativeDeepLinkDialog controller={nativePrimary.current?.deepLinks} onOpenNativeSurface={live?.native ? openNativeSurface : undefined} />
     {contextAction && <ContextMenu position={contextAction} groups={menuGroups()} dismiss={dismissContext} />}
+    {live && inspectedChat?.gatewayStoredId && <LiveAgentInspector key={inspectedChat.id + ':' + (inspectedChat.gatewayProfile ?? '')}
+      live={live} chat={inspectedChat} onClose={() => setAgentInspectorId(null)} />}
     {artifactPreview && artifactPreview.live===toolLive && api.getChat(artifactPreview.session.id)===artifactPreview.session && viewedChat.current===artifactPreview.session.id && <NativeArtifactPreview live={artifactPreview.live} sessionId={artifactPreview.storedId} target={artifactPreview.target} onClose={()=>setArtifactPreview(null)} />}
     {composerChat && attachmentPreview && <AttachmentPreview api={api} live={toolLive} sessionId={composerChat.gatewayStoredId} chatId={composerChat.id} entry={attachmentPreview}
       onClose={() => setAttachmentPreview(null)} />}

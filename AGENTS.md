@@ -169,3 +169,7 @@ Agent capability alignment targets the checked-out AIWATA runtime, including its
 ## 完整桌面 token（084）
 
 视觉维护先读本工程 [DESIGNS.md](DESIGNS.md) 与核心权威规范。共享JSON是唯一手写源，`src/design/aiwata-tokens.*`仅为生成副本；`npm run check:design`检查同步。保留用户内容颜色、现有主题所属、工具实例与减少动态合同。
+
+Bot 私聊顶部仅显示可打开设置的头像和名称。已连接时隐藏连接提示，断线与过期提示仍可见。「Agent 能力与任务」从会话标签右键菜单进入，按该标签所属的会话和 Profile 查询。
+
+助手的历史与流式回复默认渲染 Markdown，已生成回复的消息操作菜单提供查看与复制源码，读取原始消息文本。底部审批按钮与 `/approvals` 共用当前 Profile 的后端确认值，切换或重连后重新读取。审批菜单直接呈现可选模式，用选中标记表示当前模式，菜单与输入栏使用一致的模式图标。

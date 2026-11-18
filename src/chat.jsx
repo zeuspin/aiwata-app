@@ -9,11 +9,11 @@ import {
 } from './composer.mjs'
 import { useLiveCompletions } from './use-live-completions.jsx'
 import { liveCompletionTrigger, liveNavigationCommands } from './live-completions.mjs'
+import { ApprovalMenu, LiveApprovalControl, useLiveApprovalMode } from './live-approval-control.jsx'
 import './composer.css'
 
 export { sources } from './composer.mjs'
 const LiveModelPicker = lazy(() => import('./live-model-picker.jsx'))
-const LiveApprovalControl = lazy(() => import('./live-approval-control.jsx'))
 
 export function Composer({ chat, project, projectPicker, bot, group, members, onClearReply, autoFocus, compact, api, refresh, send, stop, report, assets, onCommand, onAttachmentPreview, live, liveModel, modelService, onSelectModel, modelDisabled, approvalService, approvalConnected, voiceService, completionService, completionCwd, sendDisabled, stopDisabled }) {
   const [menu, setMenu] = useState('')
@@ -35,8 +35,9 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
   const suggestionId = useId()
   const model = getModel(chat)
   const mode = getApprovalMode(api.current()?.approvalMode, chat.permission)
+  const approval = useLiveApprovalMode(live && !group ? approvalService : null, chat.gatewayProfile, approvalConnected, report)
   const canStartCommand = !chat.draft.trim() || /^\s*\/[a-z-]*$/i.test(chat.draft)
-  const canSend = !sendDisabled && hasPromptContent({ text: chat.draft, attachments: chat.attachments })
+  const canSend = !sendDisabled && !approval.busy && hasPromptContent({ text: chat.draft, attachments: chat.attachments })
   const trigger = focused && !voice && !menu && (live ? liveCompletionTrigger : getTrigger)(chat.draft, caret)
   const triggerKey = trigger ? JSON.stringify([chat.draft, caret]) : ''
   const nativeCompletions = useLiveCompletions({ live: completionService, chat, trigger, text: chat.draft, cwd: completionCwd, enabled: !!trigger && !group && dismissed !== triggerKey })
@@ -158,10 +159,9 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
       if (name === 'approvals') {
         if (args) {
           if (!approvalModes.some(option => option.id === args)) return report('审批方式可选 manual、smart 或 off', true)
-          try {
-            await approvalService.rpc('config.set', { key: 'approvals.mode', value: args }, chat.gatewayProfile)
+          if (await approval.save(args)) {
             if (api.getChat(chat.id)?.draft.trim() === '/approvals ' + args) { setDraft(''); report('审批方式已保存') }
-          } catch (problem) { report(problem.message, true) }
+          }
         } else { root.current.querySelector('[aria-label="Agent 批准方式"]')?.click(); setDraft('') }
         return
       }
@@ -504,11 +504,10 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
               <div className="composer-actions">
                 <IconButton icon="add" label="添加素材" aria-expanded={menu === 'attachments'} onClick={event => toggleMenu(event, 'attachments')} />
                 {group ? <button type="button" className="control-text" aria-label="提及群成员" onClick={() => insertStarter('@')}>@</button>
-                : live && approvalService ? <Suspense fallback={null}><LiveApprovalControl live={approvalService} profile={chat.gatewayProfile}
-                    connected={approvalConnected} name={bot?.name} report={report} /></Suspense>
+                : live && approvalService ? <LiveApprovalControl approval={approval} connected={approvalConnected} />
                 : !live && <button type="button" className={'control-text ' + (mode.id === 'off' ? 'warning' : '')}
                   aria-label="Agent 批准方式" title={mode.label} aria-expanded={menu === 'permission'} onClick={event => toggleMenu(event, 'permission')}>
-                  <Icon name="shield" size={/* @ai-token sys.icon.size.15 */ 15} /><span>{mode.label}</span>
+                  <Icon name={mode.icon} size={/* @ai-token sys.icon.size.15 */ 15} /><span>{mode.label}</span>
                 </button>}
               </div>
               <div className="composer-actions">
@@ -540,13 +539,7 @@ export function Composer({ chat, project, projectPicker, bot, group, members, on
           {item.icon && <Icon name={item.icon} size={/* @ai-token sys.icon.size.15 */ 15} />}
         </button>)}
       </div>}
-      {menu === 'permission' && <div className="popover composer-menu" aria-label="批准方式选项">
-        <div className="popover-caption">审批方式 · 当前配置档</div>
-        {approvalModes.map(option => <button className="menu-row menu-option" type="button" key={option.id}
-          aria-pressed={mode.id === option.id} onClick={() => { pickApproval(option.id); button.current?.focus() }}>
-          <span>{option.label}<small>{option.description}</small></span>{mode.id === option.id && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
-        </button>)}
-      </div>}
+      {menu === 'permission' && <ApprovalMenu mode={mode.id} onSelect={value => { pickApproval(value); button.current?.focus() }} />}
       {menu === 'source' && <div className="popover composer-menu composer-model-menu align-right" aria-label="模型来源选项">
         <div className="popover-caption">模型与用量来源 · 演示选项</div>
         {sources.map(([id, label, description]) => <div className="composer-menu-section" key={id}>

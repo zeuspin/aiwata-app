@@ -5,14 +5,6 @@
 .bot-conversation-identity { min-width: 0; flex: 1; }
 .bot-conversation-identity h2 { margin: 0; font-size: var(--ai-comp-workbench-bot-conversation-bot-conversation-identity-h2-font-size); line-height: var(--ai-comp-workbench-bot-conversation-bot-conversation-identity-h2-line-height); }
 .bot-conversation-identity p { margin: var(--ai-comp-workbench-bot-conversation-bot-conversation-identity-p-margin); color: var(--muted); font-size: var(--ai-comp-workbench-bot-conversation-bot-conversation-identity-p-font-size); overflow-wrap: anywhere; }
-.bot-presence-label {
-  flex: none; font-size: var(--ai-comp-workbench-bot-conversation-bot-presence-label-font-size); line-height: var(--ai-comp-workbench-bot-conversation-bot-presence-label-line-height); border-radius: var(--ai-comp-workbench-bot-conversation-bot-presence-label-border-radius);
-  padding: var(--ai-comp-workbench-bot-conversation-bot-presence-label-padding); color: var(--muted); background: var(--sidebar);
-}
-.bot-presence-label[data-presence="waiting"] { color: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-waiting-color); background: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-waiting-background); }
-.bot-presence-label[data-presence="blocked"] { color: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-blocked-color); background: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-blocked-background); }
-.bot-presence-label[data-presence="working"] { color: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-working-color); background: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-working-background); }
-.bot-presence-label[data-presence="done"] { color: var(--ai-comp-workbench-bot-conversation-bot-presence-label-data-presence-done-color); }
 .room-member-list {
   list-style: none; display: flex; flex-wrap: wrap; gap: var(--ai-comp-workbench-bot-conversation-room-member-list-gap); padding: 0; margin: var(--ai-comp-workbench-bot-conversation-room-member-list-margin);
 }

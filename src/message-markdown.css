@@ -1,0 +1,49 @@
+.message-markdown { min-width: 0; overflow-wrap: anywhere; }
+.message-markdown > * { margin-block: 0; }
+.message-markdown > * + * { margin-block-start: var(--ai-ref-dimension-8px); }
+.message-markdown :is(h1, h2) { font-size: var(--ai-ref-dimension-18px); }
+.message-markdown :is(h3, h4, h5, h6) { font-size: var(--ai-ref-dimension-16px); }
+.message .message-markdown p { white-space: normal; }
+.message-markdown :is(ul, ol) { padding-inline-start: var(--ai-ref-dimension-20px); }
+.message-markdown blockquote {
+  border-inline-start: solid var(--ai-ref-dimension-2px) var(--line);
+  padding-inline-start: var(--ai-ref-dimension-8px);
+  color: var(--muted);
+}
+.message-markdown a { color: var(--accent); }
+.message-markdown :is(code, pre), .message-source-dialog pre {
+  font-family: var(--ai-sys-font-family-native-mono);
+}
+.message-markdown :not(pre) > code {
+  background: var(--selected);
+  border-radius: var(--ai-ref-dimension-4px);
+  padding-inline: var(--ai-ref-dimension-4px);
+}
+.message-markdown pre, .message-source-dialog pre {
+  background: var(--surface);
+  border: solid var(--ai-ref-dimension-1px) var(--line);
+  border-radius: var(--ai-ref-dimension-8px);
+  padding: var(--ai-ref-dimension-8px);
+  overflow: auto;
+  max-width: 100%;
+}
+.message-markdown-table { overflow-x: auto; }
+.message-markdown table { border-collapse: collapse; }
+.message-markdown :is(th, td) {
+  border: solid var(--ai-ref-dimension-1px) var(--line);
+  padding: var(--ai-ref-dimension-4px) var(--ai-ref-dimension-8px);
+}
+.message-markdown th { background: var(--surface); text-align: start; }
+.message-source-actions { display: flex; align-items: center; gap: var(--ai-ref-dimension-4px); }
+.message-source-actions > .icon-button { color: var(--muted); }
+@media (hover: hover) {
+  .message-source-actions > .icon-button { opacity: 0; }
+  .message:is(:hover, :focus-within) .message-source-actions > .icon-button { opacity: 1; }
+}
+.message-source-dialog pre {
+  max-height: var(--ai-comp-workbench-agent-transcript-agent-request-content-max-height);
+  margin: 0 0 var(--ai-ref-dimension-8px);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message-source-dialog small[role="status"] { margin-inline-start: var(--ai-ref-dimension-8px); }

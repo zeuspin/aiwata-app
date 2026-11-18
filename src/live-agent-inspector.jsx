@@ -1,19 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Dialog, Empty } from './management-ui.jsx'
-import { Icon } from './icons.jsx'
 import './live-agent-inspector.css'
 
 // Snapshots come from the native session authority, not the front-end tool menu.
-export function LiveAgentInspector({ live, chat, connected }) {
-  const [open, setOpen] = useState(false)
-  return <>
-    <button type="button" className="agent-inspector-trigger" disabled={!connected || !chat?.gatewayStoredId}
-      onClick={() => setOpen(true)}><Icon name="settings" size={/* @ai-token sys.icon.size.13 */ 13} />Agent 能力与任务</button>
-    {open && <Inspector key={chat.id + ':' + (chat.gatewayProfile ?? '')} live={live} chat={chat} onClose={() => setOpen(false)} />}
-  </>
-}
-
-function Inspector({ live, chat, onClose }) {
+export function LiveAgentInspector({ live, chat, onClose }) {
   const [tab, setTab] = useState('tools')
   const [data, setData] = useState({})
   const [error, setError] = useState('')

@@ -1,41 +1,73 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { approvalModes } from './composer.mjs'
 import { Icon } from './icons.jsx'
 
-export default function LiveApprovalControl({ live, profile, connected, name, report }) {
-  const [mode, setMode] = useState(null)
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const root = useRef(null)
-  const button = useRef(null)
-  const revision = useRef(0)
-  const mounted = useRef(false)
+const initialState = { mode: null, busy: false, error: '' }
+const modeKey = 'approvals.mode'
 
-  function nativeMode(result) {
-    if (!approvalModes.some(option => option.id === result?.value)) throw new Error('AIWATA 返回了未知的审批方式。')
-    return result.value
+function nativeMode(result) {
+  if (!approvalModes.some(option => option.id === result?.value)) throw new Error('AIWATA 返回了未知的审批方式。')
+  return result.value
+}
+
+export function useLiveApprovalMode(live, profile, connected, report) {
+  const scope = useMemo(() => ({ revision: 0, saving: false }), [live, profile, connected])
+  const active = useRef(null)
+  const [status, setStatus] = useState(null)
+  const state = status?.scope === scope ? status.state : initialState
+
+  function update(patch) {
+    setStatus(previous => ({ scope, state: { ...(previous?.scope === scope ? previous.state : initialState), ...patch } }))
   }
 
   async function read() {
-    const current = ++revision.current
+    if (!live || !connected || scope.saving) return
+    const revision = ++scope.revision
+    const current = () => active.current === scope && scope.revision === revision
     try {
-      const value = nativeMode(await live.rpc('config.get', { key: 'approvals.mode' }, profile))
-      if (mounted.current && revision.current === current) { setMode(value); setError('') }
+      const mode = nativeMode(await live.rpc('config.get', { key: modeKey }, profile))
+      if (current()) update({ mode, error: '' })
     } catch (problem) {
-      if (mounted.current && revision.current === current) setError(problem.message)
+      if (current()) update({ error: problem.message })
     }
   }
 
-  useEffect(() => {
-    mounted.current = true
-    setMode(null)
-    setOpen(false)
-    setBusy(false)
-    setError('')
-    if (connected) void read()
-    return () => { mounted.current = false; revision.current++ }
-  }, [live, profile, connected])
+  useLayoutEffect(() => {
+    active.current = scope
+    return () => { active.current = null; scope.revision++ }
+  }, [scope])
+  useEffect(() => { void read() }, [scope])
+
+  async function save(value) {
+    if (!live || !connected || scope.saving || active.current !== scope) return false
+    scope.saving = true
+    const revision = ++scope.revision
+    const current = () => active.current === scope && scope.revision === revision
+    update({ busy: true, error: '' })
+    try {
+      const mode = nativeMode(await live.rpc('config.set', { key: modeKey, value }, profile))
+      if (!current()) return false
+      update({ mode })
+      if (mode !== value) throw new Error('AIWATA 未应用所选的审批方式。')
+      return true
+    } catch (problem) {
+      if (current()) { update({ error: problem.message }); report(problem.message, true) }
+      return false
+    } finally {
+      scope.saving = false
+      if (current()) update({ busy: false })
+    }
+  }
+
+  return { ...state, scope, read, save }
+}
+
+export function LiveApprovalControl({ approval, connected }) {
+  const { mode, busy, error, scope, read, save } = approval
+  const [open, setOpen] = useState(false)
+  const root = useRef(null)
+  const button = useRef(null)
+  useEffect(() => { setOpen(false) }, [scope])
 
   useEffect(() => {
     const outside = event => { if (!root.current?.contains(event.target)) setOpen(false) }
@@ -44,20 +76,9 @@ export default function LiveApprovalControl({ live, profile, connected, name, re
   }, [])
 
   async function select(value) {
-    if (busy || !connected) return
-    const current = ++revision.current
-    setBusy(true)
-    try {
-      const confirmed = nativeMode(await live.rpc('config.set', { key: 'approvals.mode', value }, profile))
-      if (!mounted.current || revision.current !== current) return
-      setMode(confirmed)
-      setError('')
+    if (await save(value)) {
       setOpen(false)
       button.current?.focus()
-    } catch (problem) {
-      if (mounted.current && revision.current === current) { setError(problem.message); report(problem.message, true) }
-    } finally {
-      if (mounted.current && revision.current === current) setBusy(false)
     }
   }
 
@@ -71,16 +92,27 @@ export default function LiveApprovalControl({ live, profile, connected, name, re
         if (!open) void read()
         setOpen(value => !value)
       }}>
-      <Icon name="shield" size={/* @ai-token sys.icon.size.15 */ 15} /><span>{busy ? '正在保存…' : option?.label || (error ? '审批方式' : '读取审批方式…')}</span>
+      <Icon name={option?.icon ?? 'shield'} size={/* @ai-token sys.icon.size.15 */ 15} /><span>{busy ? '正在保存…' : option?.label || (error ? '审批方式' : '读取审批方式…')}</span>
     </button>
-    {open && <div className="popover composer-menu" aria-label="批准方式选项">
-      <div className="popover-caption">{name ? name + ' · ' : ''}当前配置档的所有会话</div>
-      {approvalModes.map(option => <button key={option.id} className="menu-row menu-option" type="button"
-        aria-pressed={mode === option.id} disabled={busy} onClick={() => void select(option.id)}>
-        <span>{option.label}<small>{option.description}</small></span>{mode === option.id && <Icon name="check" size={/* @ai-token sys.icon.size.15 */ 15} />}
-      </button>)}
+    {open && <ApprovalMenu mode={mode} disabled={busy} onSelect={value => void select(value)}>
       {error && <><p role="alert" className="management-error">{error}</p>
         <button type="button" className="menu-row" disabled={busy} onClick={() => void read()}>重新读取审批方式</button></>}
-    </div>}
+    </ApprovalMenu>}
+  </div>
+}
+
+export function ApprovalMenu({ mode, disabled, onSelect, children }) {
+  return <div className="popover composer-menu approval-menu" aria-label="批准方式选项">
+    {approvalModes.map(option => <button key={option.id} type="button"
+      className={'approval-option' + (option.id === 'off' ? ' warning' : '')}
+      aria-pressed={mode === option.id} disabled={disabled} onClick={() => onSelect(option.id)}>
+      <Icon name={option.icon} />
+      <span className="approval-option-copy">
+        <strong>{option.label}</strong>
+        <small>{option.description}</small>
+      </span>
+      {mode === option.id && <span className="approval-option-check" aria-hidden="true"><Icon name="tick" /></span>}
+    </button>)}
+    {children}
   </div>
 }
