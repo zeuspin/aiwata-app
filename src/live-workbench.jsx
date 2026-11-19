@@ -304,7 +304,7 @@ export function useLiveWorkbench({ live, api, accountId, chatId, refresh, report
       if (!isCurrent()) throw new Error('当前会话已变化。')
       if (result.confirm_required) {
         if (confirmation) throw new Error('模型确认已变化，请重新选择。')
-        return { confirmation: { chatId: chat.id, selection, message: result.confirm_message,
+        return { confirmation: { chatId: chat.id, selection, confirm_message: result.confirm_message, warnings: result.warnings,
           params: { ...params, payload: { ...params.payload, confirm: result.confirm } } } }
       }
       const snapshot = await resume(chat)

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import LiveProviderManager from './live-provider-manager.jsx'
 import { Dialog, Empty, Field } from './management-ui.jsx'
+import { modelSwitchWarning } from './session-model-warning.mjs'
 
 export default function LiveModelPicker({ chat, live, onSelect, onClose }) {
   const [inventory, setInventory] = useState(null)
@@ -52,7 +53,7 @@ export default function LiveModelPicker({ chat, live, onSelect, onClose }) {
     }}>
     {confirmation ? <>
       <p>切换到 {selected}</p>
-      <p className="model-confirmation">{confirmation.message || 'AIWATA 要求确认这次模型切换。'}</p>
+      <p className="model-confirmation">{modelSwitchWarning(confirmation) || 'AIWATA 要求确认这次模型切换。'}</p>
       <button className="secondary management-inline-action" type="button" disabled={busy} onClick={() => setConfirmation(null)}>返回模型列表</button>
     </> : <>
       <p>{sessionId ? '选择会影响这个会话接下来的回复。' : '首次发送时使用所选模型。'}</p>
