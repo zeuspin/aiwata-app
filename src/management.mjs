@@ -35,6 +35,9 @@ const scheduleDays = new Set([
   'thu', 'thur', 'thurs', 'thursday', 'fri', 'friday', 'sat', 'saturday',
 ])
 
+export const demoBotToolsets = [['file', '文件'], ['browser', '浏览器'], ['terminal', '终端'], ['web', '网络检索'], ['memory', '记忆']]
+export const demoBotMcp = [['workspace-files', '工作区文件'], ['docs-search', '文档检索']]
+
 export const memoryTypes = {
   memory: { icon: 'book', name: '工作记忆', source: 'MEMORY.md' },
   user: { icon: 'file', name: '用户偏好', source: 'USER.md' },

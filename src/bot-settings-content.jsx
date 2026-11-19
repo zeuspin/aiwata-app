@@ -41,7 +41,7 @@ export function InlineSettingsForm({ children, onSubmit, submit = '保存', subm
   </div>
 }
 
-export function BotSettingsContent({ item, kind, record, management, live, Editor, GroupEditor, onSave, onDirtyChange, onBusyChange, onOpenProfileSection, onOpenNativeSettings, report }) {
+export function BotSettingsContent({ item, kind, record, management, live, Editor, GroupEditor, onSave, onDirtyChange, onBusyChange, onOpenProfileSection, onOpenNativeSettings, report, avatarOnly, onSaved, profileDefinition }) {
 
   const [snapshot, setSnapshot] = useState(live ? null : {item, version: 0})
   const [error, setError] = useState('')
@@ -72,6 +72,7 @@ export function BotSettingsContent({ item, kind, record, management, live, Edito
     const result = await onSave(settings, options, snapshot.item)
     if (result || token !== generation.current) return result
     callbacks.current.onDirtyChange?.(false)
+    if (onSaved) { onSaved(); return }
     try {
       const next = await load()
       if (token === generation.current) setSnapshot({...next, version: snapshot.version + 1})
@@ -82,8 +83,8 @@ export function BotSettingsContent({ item, kind, record, management, live, Edito
   if (error) return <div className="bot-settings-inline"><p role="alert" className="management-error">{error}</p><button className="secondary" onClick={() => setAttempt(value => value + 1)}>{"重新读取设置"}</button></div>
   if (!snapshot) return <Empty>正在读取当前{kind === 'bot' ? ' Bot' : '群聊'}设置…</Empty>
   const shared = {key: snapshot.version, item: snapshot.item, live, embedded: true, onSave: save, onDirtyChange, onBusyChange}
-  return <><p className="bot-settings-scope">{live ? "本机 AIWATA" : "本地演示"} · {item.name}{kind === 'bot' ? ' 的独立配置' : ' 的群聊配置'}</p>
-    {kind === 'bot' ? <Editor {...shared} bots={record.bots} management={management} details={snapshot.details} report={report}
+  return <>{!avatarOnly && !profileDefinition && <p className="bot-settings-scope">{live ? "本机 AIWATA" : "本地演示"} · {item.name}{kind === 'bot' ? ' 的独立配置' : ' 的群聊配置'}</p>}
+    {kind === 'bot' ? <Editor {...shared} {...profileDefinition} avatarOnly={avatarOnly} bots={record.bots} management={management} details={snapshot.details} report={report}
       onOpenProfileSection={onOpenProfileSection} onOpenNativeSettings={onOpenNativeSettings} />
       : <GroupEditor {...shared} bots={[...record.bots, ...(snapshot.item.memberDetails ?? []).filter(member => !record.bots.some(bot => bot.id === member.id))]} />}
   </>

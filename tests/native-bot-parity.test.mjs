@@ -27,3 +27,39 @@ test('only the save operation that actually minted the Profile reports a new Bot
  assert.equal((await settings.saveBot(input)).created,true)
  assert.equal((await settings.saveBot(input)).created,false)
 })
+
+test('Bot voice reads and patches only the selected Profile and configured voice field', async () => {
+  const { nativeSettings } = await import('../src/native-desktop-settings.mjs')
+  const writes = []
+  let provider = 'elevenlabs'
+  const voices = { elevenlabs: { voice_id: 'existing-voice', model_id: 'keep-model' }, openai: { voice: 'alloy' } }
+  let applies = true
+  const settings = nativeSettings({ api: async (path, options) => {
+    assert.equal(path, '/api/config')
+    assert.equal(options.profile, 'writer')
+    if (options.method === 'PUT') {
+      writes.push(options.body)
+      if (applies) for (const [name, patch] of Object.entries(options.body.config.tts)) Object.assign(voices[name], patch)
+      return { ok: true }
+    }
+    return { config: { tts: { provider, ...voices } } }
+  } })
+  const voice = await settings.botVoice('writer')
+  assert.deepEqual(voice, { provider: 'elevenlabs', field: 'voice_id', value: 'existing-voice' })
+  await settings.botVoice('writer', { provider: voice.provider, previous: voice.value, value: 'new-voice' })
+  assert.deepEqual(writes, [{ config: { tts: { elevenlabs: { voice_id: 'new-voice' } } } }])
+  provider = 'openai'
+  await assert.rejects(
+    settings.botVoice('writer', { provider: voice.provider, previous: voice.value, value: 'outdated-voice' }),
+    /语音引擎或音色已变化/,
+  )
+  assert.equal(writes.length, 1)
+  provider = '  Nous '
+  assert.deepEqual(await settings.botVoice('writer'), { provider: 'nous', field: 'voice', value: 'alloy' })
+  applies = false
+  await assert.rejects(
+    settings.botVoice('writer', { provider: 'nous', previous: 'alloy', value: 'nova' }),
+    /未保存音色/,
+  )
+  assert.deepEqual(writes.at(-1), { config: { tts: { openai: { voice: 'nova' } } } })
+})

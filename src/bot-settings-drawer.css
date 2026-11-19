@@ -31,3 +31,26 @@
   .bot-settings-drawer-heading { padding: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-heading-padding); }
   .bot-settings-drawer-body { padding: var(--ai-comp-workbench-bot-settings-drawer-media-max-width-600px-bot-settings-drawer-body-padding); }
 }
+
+.bot-settings-drawer.bot-avatar-dialog {
+  inset: 0;
+  width: var(--ai-comp-workbench-bot-avatar-picker-project-dialog-bot-editor-dialog-width);
+  height: var(--ai-ref-dimension-600px);
+  max-height: var(--ai-comp-workbench-management-management-dialog-max-height);
+  margin: auto;
+  border-radius: var(--ai-comp-workbench-styles-project-dialog-border-radius);
+}
+.bot-avatar-dialog .bot-settings-drawer-body,
+.bot-avatar-dialog .bot-settings-inline { display: flex; flex-direction: column; }
+.bot-avatar-dialog :is(.bot-settings-drawer-body, .bot-settings-inline) { flex: 1; min-height: 0; }
+.bot-avatar-dialog .bot-settings-inline form { flex: 1; min-height: 0; overflow: auto; }
+.bot-avatar-dialog .bot-settings-save { flex: none; }
+.bot-avatar-dialog .bot-look-picker { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.bot-avatar-dialog .bot-geometry-detail > summary { cursor: pointer; }
+.bot-avatar-dialog .bot-geometry-detail[open] > summary { margin-bottom: var(--ai-ref-dimension-12px); }
+.bot-avatar-dialog .bot-geometry-detail:not([open]) > :not(summary) { display: none; }
+
+@media /* @ai-query sys.layout.query.workbench-bot-avatar-picker.media-fd38a48f */ (max-width: 590px) {
+  .bot-avatar-dialog .bot-look-picker { grid-template-columns: minmax(0, 1fr); }
+  .bot-avatar-dialog .bot-look-preview { grid-row: 1; }
+}

@@ -63,3 +63,165 @@
 @media (prefers-reduced-motion: reduce) {
   .bot-conversation-pill { transition: none; }
 }
+
+.chat-pane-conversation {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+.bot-profile-card {
+  flex: none;
+  align-self: flex-end;
+  inline-size: min(var(--ai-ref-dimension-280px), calc(100% - 2 * var(--ai-ref-dimension-8px)));
+  block-size: min(81%, calc(100% - 2 * var(--ai-ref-dimension-8px)));
+  min-block-size: 0;
+  margin: var(--ai-ref-dimension-8px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--ai-ref-dimension-16px);
+  border: var(--ai-ref-dimension-1px) solid var(--line);
+  border-radius: var(--ai-ref-dimension-16px);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--ai-comp-workbench-bot-conversation-header-bot-conversation-pill-box-shadow);
+}
+.chat-pane[data-bot-profile-layout="docked"] { flex-direction: row; align-items: stretch; }
+.chat-pane[data-bot-profile-layout="docked"] > .chat-pane-conversation {
+  flex-basis: 0;
+  --bot-conversation-content-width: min(84%, var(--ai-ref-dimension-760px));
+}
+.chat-pane[data-bot-profile-layout="docked"] :is(.private-conversation .message-list, .composer-wrap) {
+  inline-size: var(--bot-conversation-content-width);
+}
+.chat-pane[data-bot-profile-layout="docked"] .private-conversation .message-list {
+  row-gap: var(--ai-ref-dimension-12px);
+  padding-inline: 0;
+}
+.chat-pane[data-bot-profile-layout="docked"] .private-conversation .conversation-message-heading { min-block-size: 0; }
+.chat-pane[data-bot-profile-layout="docked"] .private-conversation .message.agent[data-speaker-avatar="false"]
+  .conversation-message-heading:not(:has(time, small, button)) { display: none; }
+@supports (field-sizing: content) {
+  .chat-pane[data-bot-profile-layout="docked"] .composer textarea {
+    field-sizing: content;
+    min-block-size: var(--ai-ref-dimension-28px);
+  }
+}
+.chat-pane[data-bot-profile-layout="docked"] .private-conversation .message.agent.conversation-message {
+  max-inline-size: 88%;
+  justify-self: start;
+}
+.chat-pane[data-bot-profile-layout="docked"] > .bot-profile-card {
+  align-self: flex-start;
+  inline-size: clamp(var(--ai-ref-dimension-260px), 25.5%, var(--ai-ref-dimension-340px));
+}
+.chat-pane[data-bot-profile-layout="overlay"] > .bot-profile-card {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: var(--ai-comp-workbench-styles-context-flyout-z-index);
+  box-shadow: var(--ai-comp-workbench-styles-popover-box-shadow);
+}
+.chat-pane[data-bot-profile-layout="stacked"] > .bot-profile-card {
+  order: -1;
+  flex: 0 1 auto;
+  max-block-size: 58%;
+}
+.chat-pane[data-bot-profile-layout="stacked"] > .chat-pane-conversation {
+  flex-basis: 0;
+  min-block-size: min(42%, var(--ai-ref-dimension-280px));
+}
+.bot-profile-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ai-ref-dimension-12px);
+}
+.bot-profile-header-actions {
+  display: flex;
+  align-self: start;
+  gap: var(--ai-ref-dimension-2px);
+}
+.bot-profile-identity { display: grid; gap: var(--ai-ref-dimension-4px); }
+.bot-profile-card :is(h2, p, small) { overflow-wrap: anywhere; }
+.bot-profile-card h2 { margin: 0; font-size: var(--ai-ref-dimension-16px); }
+.bot-profile-card small { color: var(--muted); }
+.bot-profile-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: var(--ai-ref-dimension-56px);
+  block-size: var(--ai-ref-dimension-56px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ai-ref-dimension-16px);
+}
+.bot-profile-avatar .bot-avatar { --bot-size: var(--ai-ref-dimension-56px); }
+.bot-profile-edit-icon {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--ai-ref-dimension-2px);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+}
+.bot-profile-avatar:hover { background: var(--ai-sys-color-surface-hover); }
+.bot-profile-card .bot-settings-inline { margin-top: var(--ai-ref-dimension-16px); }
+.bot-profile-card .bot-settings-inline .bot-editor-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(var(--ai-ref-dimension-38px), 1fr));
+  gap: 0;
+}
+.bot-profile-card .bot-editor-tabs > button {
+  min-height: var(--ai-ref-dimension-32px);
+  padding: var(--ai-ref-dimension-4px);
+}
+.bot-profile-definition-fields,
+.bot-profile-overview-extra {
+  display: grid;
+  gap: var(--ai-ref-dimension-12px);
+}
+.bot-profile-definition-fields[hidden] { display: none; }
+.bot-profile-card .bot-settings-inline textarea.bot-profile-description {
+  background: var(--surface);
+  border-color: transparent;
+  resize: none;
+}
+.bot-profile-card .bot-settings-inline textarea.bot-profile-description:hover { background: var(--sidebar); }
+.bot-profile-card .bot-settings-inline textarea.bot-profile-description:focus { border-color: var(--accent); }
+.bot-profile-card .bot-profile-language { grid-template-columns: auto minmax(0, 1fr); }
+.bot-profile-overview-extra { gap: 0; margin-top: var(--ai-ref-dimension-12px); }
+.bot-profile-plan-summary,
+.bot-profile-voice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ai-ref-dimension-8px);
+  padding-block: var(--ai-ref-dimension-12px);
+  border-block-start: var(--ai-ref-dimension-1px) solid var(--line);
+}
+.bot-profile-plan-summary > small,
+.bot-profile-voice > small { flex: 1 1 auto; }
+.bot-profile-card .management-content-compact {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+.bot-profile-card .management-content-compact .management-panel {
+  margin-block: var(--ai-ref-dimension-8px);
+}
+.bot-profile-card .management-panel-heading,
+.bot-profile-card .management-entry { flex-wrap: wrap; }
+.bot-profile-card .bot-settings-save {
+  position: sticky;
+  inset-block-end: 0;
+  flex-wrap: wrap;
+  padding-block: var(--ai-ref-dimension-8px);
+  background: var(--surface);
+}

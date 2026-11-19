@@ -72,6 +72,51 @@ test('regular composer still clears its accepted draft through the shared native
   assert.equal(result.ok,true);assert.equal(chat.draft,'');assert.equal(f.api.current().chats[chat.id],chat)
 })
 
+test('an absolute path at the start of a Bot message is submitted verbatim', async () => {
+  const f = fixture()
+  f.api.syncGatewayBots([{ profile: 'writer', name: 'Writer' }])
+  const chat = f.api.getChat('bot:writer')
+  const draft = '/Users/example/Documents/github/OpenMontage\n这里已经下过源码了'
+  f.api.changeChat(chat.id, { gatewayId: 'runtime-a', gatewayStoredId: 'stored-a', draft })
+  f.live.capability = async (method, profile, params) => {
+    if (method === 'skill.expand') throw new Error('unsupported_command')
+    assert.equal(method, 'complete.slash')
+    assert.equal(profile, 'writer')
+    assert.deepEqual(params, { session_id: 'runtime-a', text: '/users/example/documents/github/openmontage' })
+    return { items: [{ kind: 'skill', text: 'users/example/documents/github/openmontage-more ' }] }
+  }
+
+  const result = await submitLivePrompt({ ...f.options, chat })
+
+  assert.equal(result.ok, true, result.message)
+  assert.equal(f.calls.find(([method]) => method === 'prompt.submit')[1].text, draft)
+  assert.equal(chat.messages.at(-1).text, draft)
+})
+
+test('a registered nested skill still expands in the owning Bot session', async () => {
+  const f = fixture()
+  f.api.syncGatewayBots([{ profile: 'writer', name: 'Writer' }])
+  const chat = f.api.getChat('bot:writer')
+  const draft = '/project/review\n保留原文'
+  f.api.changeChat(chat.id, { gatewayId: 'runtime-a', gatewayStoredId: 'stored-a', draft })
+  const calls = []
+  f.live.capability = async (...args) => {
+    calls.push(args)
+    if (args[0] === 'complete.slash') return { items: [{ kind: 'skill', text: 'project/review ' }] }
+    return { message: 'Expanded review instructions' }
+  }
+
+  const result = await submitLivePrompt({ ...f.options, chat })
+
+  assert.equal(result.ok, true, result.message)
+  assert.deepEqual(calls, [
+    ['complete.slash', 'writer', { session_id: 'runtime-a', text: '/project/review' }],
+    ['skill.expand', 'writer', { session_id: 'runtime-a', name: 'project/review', arg: '保留原文' }],
+  ])
+  assert.equal(f.calls.find(([method]) => method === 'prompt.submit')[1].text, 'Expanded review instructions')
+  assert.equal(chat.messages.at(-1).text, draft)
+})
+
 
 test('native admission for another submission never acknowledges or promotes this capture', async () => {
   const f=fixture(),chat=f.api.openGatewayCaptureDraft('receipt-owner'),rpc=f.live.rpc

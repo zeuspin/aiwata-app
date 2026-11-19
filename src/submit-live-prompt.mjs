@@ -48,9 +48,17 @@ export async function submitLivePrompt({ live, api, chat, folder, active, operat
     }
     if (!unchanged() || !chat.gatewayId) return rejected('The target session is busy or unavailable.')
     let wireText = text
+    const profile = chat.gatewayProfile || 'default'
     const explicitCommand = parseSlash(text)
     const automaticCommand = explicitCommand ? null : botCreationCommand(live, chat, text)
-    const command = explicitCommand || automaticCommand
+    let command = explicitCommand || automaticCommand
+    if (explicitCommand?.[0].includes('/')) {
+      // Absolute paths share the syntax of nested skills. Require a match in this session.
+      const name = explicitCommand[0]
+      const choices = await live.capability('complete.slash', profile, { session_id: chat.gatewayId, text: '/' + name })
+      if (!unchanged()) return rejected('The target session changed before dispatch.')
+      if (!choices?.items?.some(item => item.kind === 'skill' && item.text.trim().replace(/^\//, '') === name)) command = null
+    }
     if (command) {
       const saved = chat.gatewaySkill
       if (saved?.text === text && saved.sessionId === chat.gatewayId) wireText = saved.message
@@ -59,7 +67,7 @@ export async function submitLivePrompt({ live, api, chat, folder, active, operat
           await ensureBotManagementSkill(live, current)
           if (!unchanged()) return rejected('The target session changed before dispatch.')
         }
-        const expansion = await live.capability('skill.expand', chat.gatewayProfile || 'default', { session_id: chat.gatewayId, name: command[0], arg: command[1] })
+        const expansion = await live.capability('skill.expand', profile, { session_id: chat.gatewayId, name: command[0], arg: command[1] })
         if (!unchanged()) return rejected('The target session changed before dispatch.')
         wireText = expansion.message
         api.changeChat(id, { gatewaySkill: { text, sessionId: chat.gatewayId, message: wireText } })

@@ -87,7 +87,7 @@ function PortraitControls({ botId, look, select }) {
   </div>
 }
 
-export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, onUpload, onRemovePhoto, pending, error }) {
+export function BotAvatarPicker({ bot, controlsFirst, onChange, previewState, onPreviewState, onUpload, onRemovePhoto, pending, error }) {
   const [showEmptyPhoto, setShowEmptyPhoto] = useState(false)
   const look = getBotAppearance(bot)
   const select = patch => onChange({ ...look, ...patch })
@@ -100,17 +100,20 @@ export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, o
       : mode === 'peeking' ? { mode, peekingDesign: getPeekingDesign(look.peekingDesign) } : { mode })
   }
 
-  return <section className="bot-look-picker" aria-label="Bot 头像外观">
-    <div className="bot-look-preview">
-      <div className="bot-look-preview-stage">
-        <strong>实时预览</strong>
-        <BotFace bot={bot} state={previewState} size="preview" />
-      </div>
-      <label className="bot-look-state">头像动效预览<select value={previewState} onChange={event => onPreviewState(event.target.value)}>
-        {Object.entries(botPresenceLabels).map(([state, label]) => <option value={state} key={state}>{label}</option>)}
-      </select></label>
-      <div className="bot-look-list-preview"><BotFace bot={bot} size="small" still /><span>列表尺寸</span></div>
+  const GeometryDetail = controlsFirst ? 'details' : 'div'
+  const preview = <div className="bot-look-preview">
+    <div className="bot-look-preview-stage">
+      <strong>实时预览</strong>
+      <BotFace bot={bot} state={previewState} size="preview" />
     </div>
+    <label className="bot-look-state">头像动效预览<select value={previewState} onChange={event => onPreviewState(event.target.value)}>
+      {Object.entries(botPresenceLabels).map(([state, label]) => <option value={state} key={state}>{label}</option>)}
+    </select></label>
+    <div className="bot-look-list-preview"><BotFace bot={bot} size="small" still /><span>列表尺寸</span></div>
+  </div>
+
+  return <section className="bot-look-picker" aria-label="Bot 头像外观">
+    {!controlsFirst && preview}
     <div className="bot-look-config">
       <div className="bot-look-families" role="group" aria-label="头像系列">
         {families.map(([mode, label]) => <button type="button" key={mode} aria-pressed={family === mode}
@@ -149,7 +152,8 @@ export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, o
             </button>)}
           </div>
         </fieldset>
-        <div className="bot-geometry-detail">
+        <GeometryDetail className="bot-geometry-detail">
+          {controlsFirst && <summary>细调配色和眼睛</summary>}
           <div className="bot-geometry-heading">
             <h3>配色与眼睛</h3>
             <button type="button" className="secondary" onClick={() => {
@@ -165,8 +169,9 @@ export function BotAvatarPicker({ bot, onChange, previewState, onPreviewState, o
               {Object.entries(botEyeStyles).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select></label>
           </div>
-        </div>
+        </GeometryDetail>
       </div>}
     </div>
+    {controlsFirst && preview}
   </section>
 }

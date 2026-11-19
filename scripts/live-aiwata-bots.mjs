@@ -122,7 +122,10 @@ export async function saveGatewayBot(connection, home, input, creations) {
     if (!asset.ok) throw new Error('头像保存失败，请重试。')
   }
   const result = await connection.call('profiles.configure', {
-    name: profile, description, soul, ...capabilities,
+    name: profile,
+    ...(description === input.originalDescription ? {} : { description }),
+    ...(soul === input.originalSoul ? {} : { soul }),
+    ...capabilities,
     ui_meta: {
       [desktopMeta]: { ...row.ui_meta?.[desktopMeta], title },
       [appMeta]: { createId: savedCreation ?? createId,

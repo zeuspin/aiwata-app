@@ -6,7 +6,8 @@ import './management.css'
 export const dateLabel = value => new Date(value).toLocaleString('zh-CN', { hour12: false })
 export const valueOf = (form, name) => String(form.get(name) ?? '').trim()
 
-export function Frame({ icon, title, description, children, actions, back, live }) {
+export function Frame({ icon, title, description, children, actions, back, live, compact }) {
+  if (compact) return <div className="management-content management-content-compact">{children}</div>
   return <div className="management-content">
     {back && <button className="management-back" onClick={back.onClick}><Icon name="back" size={/* @ai-token sys.icon.size.15 */ 15} />{back.label}</button>}
     <header className="management-header">

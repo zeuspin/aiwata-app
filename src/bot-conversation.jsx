@@ -1,15 +1,16 @@
-import React, { useId } from 'react'
+import React, { useId, useLayoutEffect, useRef } from 'react'
 import { BotFace, GroupFace } from './bot-avatar.jsx'
-import { roomMemberPresence } from './bot-presence.mjs'
+import { botPresence, botPresenceLabels, roomMemberPresence } from './bot-presence.mjs'
 import { botHandle } from './room.mjs'
 import { groupRouting } from './management.mjs'
+import { Icon, IconButton } from './icons.jsx'
 import './bot-conversation.css'
 import './bot-conversation-header.css'
 
 const states = { queued: '排队中', running: '执行中', completed: '已回复', waiting: '待确认',
   failed: '失败', denied: '操作已拒绝', stopped: '已停止', passed: '暂无补充' }
 
-export function BotConversationHeader({ bot, group, members, chat, account, onManage }) {
+export function BotConversationHeader({ bot, group, members, chat, account, onManage, profileOpen, profileId, triggerRef }) {
   const descriptionId = useId()
   const room = chat.pending ? chat.agentRun?.room : chat.roomOutcome
   const request = chat.agentRun?.request
@@ -17,12 +18,13 @@ export function BotConversationHeader({ bot, group, members, chat, account, onMa
   const routing = groupRouting[group?.routing ?? 'everyone']
   const name = bot?.name ?? group.name
   const description = group && [routing, lead?.name, group.purpose].filter(Boolean).join(' · ')
-  return <header className="bot-conversation-header bot-conversation-header-compact">
+  return <header className="bot-conversation-header bot-conversation-header-compact" hidden={profileOpen}>
     <div className="bot-conversation-heading bot-conversation-heading-compact">
       <h2 className="bot-conversation-title">
-        <button type="button" className="bot-conversation-pill" onClick={onManage}
-          aria-label={name + (bot ? '，Bot 设置' : '，群聊设置')} aria-describedby={description ? descriptionId : undefined} title={name}>
-          {bot ? <BotFace bot={bot} size="activity" still /> : <GroupFace members={members} account={account} large />}
+        <button type="button" className="bot-conversation-pill" onClick={onManage} ref={triggerRef}
+          aria-expanded={bot ? Boolean(profileOpen) : undefined} aria-controls={profileOpen ? profileId : undefined}
+          aria-label={name + (bot ? '，Bot 信息' : '，群聊设置')} aria-describedby={description ? descriptionId : undefined} title={name}>
+          {bot ? <BotFace bot={bot} size="activity" state={botPresence(chat)} still={Boolean(chat.gatewayUnknown || profileOpen)} /> : <GroupFace members={members} account={account} large />}
           <span className="bot-conversation-name">{name}</span>
         </button>
       </h2>
@@ -47,6 +49,35 @@ export function BotConversationHeader({ bot, group, members, chat, account, onMa
           (members.some(member => room?.statuses?.[member.id] === 'running') ? '正在处理' : '')}
     </span>}
   </header>
+}
+
+export function BotProfileCard({ id, bot, chat, hidden, onEditAvatar, onManage, onClose, children }) {
+  const card = useRef(null)
+  useLayoutEffect(() => { card.current.focus() }, [])
+  const state = botPresence(chat)
+  return <section id={id} ref={card} hidden={hidden} role="dialog" aria-labelledby={id + '-name'} tabIndex={-1} className="bot-profile-card"
+    onKeyDown={event => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.target.closest('dialog')) return
+      event.preventDefault()
+      event.stopPropagation()
+      onClose()
+    }}>
+    <header className="bot-profile-heading">
+      <button type="button" className="bot-profile-avatar" aria-label="更换头像" title="更换头像" onClick={onEditAvatar}>
+        <BotFace bot={bot} size="activity" state={state} still={Boolean(chat.gatewayUnknown)} />
+        <span className="bot-profile-edit-icon"><Icon name="edit" size={/* @ai-token sys.icon.size.14 */ 14} /></span>
+      </button>
+      <div className="bot-profile-identity">
+        <h2 id={id + '-name'}>{bot.name}</h2>
+        <small>{botPresenceLabels[state]}</small>
+      </div>
+      <div className="bot-profile-header-actions">
+        <IconButton icon="settings" label="Bot 设置" onClick={onManage} />
+        <IconButton icon="close" label="关闭 Bot 信息" onClick={onClose} />
+      </div>
+    </header>
+    {children}
+  </section>
 }
 
 export function DiscussionPause({ onContinue, onStop, disabled }) {

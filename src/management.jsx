@@ -1,3 +1,4 @@
+import { BotProfileDefinition } from './bot-profile-definition.jsx'
 import { BotSettingsContent, InlineSettingsForm } from './bot-settings-content.jsx'
 import { gatewayGroup } from './live-room-state.mjs'
 import React, { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
@@ -12,7 +13,7 @@ import { nativeCronPayload, scriptOnlyTask, cronRunRoute } from './native-cron.m
 import { NativeBotControls, NativeBotModelField, catalogBotModel } from './native-bot-controls.jsx'
 import { NativeCronModelField, NativeTaskBlueprintDialog } from './native-cron.jsx'
 import {
-  canUseProfileId, defaultProfile, getManagement, getProfileMemory, getProfileSkills,
+  canUseProfileId, defaultProfile, demoBotMcp, demoBotToolsets, getManagement, getProfileMemory, getProfileSkills,
   groupMember, groupRouting, isScheduleInput, memorySettings, memoryTypes, platforms, replaceEntry, resolveGroupMembers,
 } from './management.mjs'
 import { Badge, Confirm, Dialog, Empty, Entry, Field, Frame, Panel, Profiles, Text, dateLabel, valueOf } from './management-ui.jsx'
@@ -127,15 +128,13 @@ function ProjectSettings({ selected, record, management, api, persist, commit, o
   </Frame>
 }
 
-const toolsets = [['file', '文件'], ['browser', '浏览器'], ['terminal', '终端'], ['web', '网络检索'], ['memory', '记忆']]
-const sampleMcp = [['workspace-files', '工作区文件'], ['docs-search', '文档检索']]
 const modelKey = ({ provider, id }) => provider + ':' + id
 const modelSelection = bot => models.find(model => model.id === bot?.model && model.provider === bot?.provider)
 const initialBotModel = bot => modelSelection(bot) ? modelKey(modelSelection(bot)) : bot?.model ? 'custom' : ''
 const botEditorTabs = [['basic', '基本信息'], ['avatar', '头像'], ['capabilities', '模型与能力']]
 const avatarModeLabels = { character: '几何角色', portrait: '人物头像', peeking: '探头头像', photo: '上传图片' }
 
-function BotEditor({ item, bots, management, onClose, onSave, live, details: initialDetails, embedded, onDirtyChange, onBusyChange, onOpenProfileSection, onOpenNativeSettings, report }) {
+function BotEditor({ item, bots, management, onClose, onSave, live, details: initialDetails, embedded, avatarOnly, onDirtyChange, onBusyChange, onOpenProfileSection, onOpenNativeSettings, report }) {
 
   const [draftId] = useState(() => item?.id ?? newId())
   const [source, setSource] = useState(item)
@@ -159,8 +158,8 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
   const sourceVersion = useRef(0)
   const sourceSkills = live ? (details?.skills ?? []).map(skill => ({ id: skill.name, name: skill.name, installed: true, enabled: skill.enabled, locked: skill.locked }))
     : getProfileSkills(management, source?.id ?? defaultProfile)
-  const toolChoices = live ? (details?.toolsets ?? []).map(tool => [tool.name, tool.label || tool.name, tool.enabled]) : toolsets
-  const mcpChoices = live ? (details?.mcp_servers ?? []).map(server => [server.name, server.name, server.enabled]) : sampleMcp
+  const toolChoices = live ? (details?.toolsets ?? []).map(tool => [tool.name, tool.label || tool.name, tool.enabled]) : demoBotToolsets
+  const mcpChoices = live ? (details?.mcp_servers ?? []).map(server => [server.name, server.name, server.enabled]) : demoBotMcp
   const draftBot = { id: draftId, avatar, appearance }
   const sourceKey = source?.id ?? 'fresh'
 
@@ -231,6 +230,24 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
     }
     reader.readAsDataURL(file)
   }
+
+  const avatarPicker = <BotAvatarPicker key={sourceKey} bot={draftBot} controlsFirst={avatarOnly} onChange={setAppearance}
+    previewState={previewState} onPreviewState={setPreviewState} onUpload={pickAvatar} pending={avatarPending} error={avatarError}
+    onRemovePhoto={() => {
+      avatarVersion.current += 1
+      setAvatar('')
+      setAvatarPending(false)
+      setAvatarError('')
+      setAppearance(current => ({ ...current, mode: 'character' }))
+    }} />
+
+  if (avatarOnly) return <InlineSettingsForm onDirtyChange={onDirtyChange} onBusyChange={onBusyChange}
+    dirtyToken={JSON.stringify([avatar, appearance])} submitDisabled={avatarPending} onSubmit={() => onSave(
+      { ...item, avatar, appearance },
+      { revision: item.revision, desktopRevision: item.desktopRevision, originalSoul: item.soul, originalDescription: item.description },
+    )}>
+    <section onChange={event => event.stopPropagation()}>{avatarPicker}</section>
+  </InlineSettingsForm>
 
   return <EditorShell className="bot-editor-dialog" title={item ? "编辑 Bot" : "新建 Bot"} onClose={onClose}
     onDirtyChange={onDirtyChange} onBusyChange={onBusyChange} dirtyToken={JSON.stringify([avatar, appearance])}
@@ -326,15 +343,7 @@ function BotEditor({ item, bots, management, onClose, onSave, live, details: ini
         </div>
       </section>
       <section className="bot-editor-panel bot-settings-avatar" onChange={event => event.stopPropagation()} {...(embedded ? { hidden: page !== 'basic' || !avatarExpanded, 'aria-label': '头像设置' } : panelProps('avatar'))}>
-        <BotAvatarPicker key={sourceKey} bot={draftBot} onChange={setAppearance}
-          previewState={previewState} onPreviewState={setPreviewState} onUpload={pickAvatar} pending={avatarPending} error={avatarError}
-          onRemovePhoto={() => {
-            avatarVersion.current += 1
-            setAvatar('')
-            setAvatarPending(false)
-            setAvatarError('')
-            setAppearance(current => ({ ...current, mode: 'character' }))
-          }} />
+        {avatarPicker}
       </section>
       <section className="bot-editor-panel" {...panelProps('capabilities')}>
         <div className="bot-editor-fields" key={sourceKey}>
@@ -424,7 +433,7 @@ function GroupEditor({ item, bots, onClose, onSave, live, embedded, onDirtyChang
   </EditorShell>
 }
 
-function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManageBot, onOpenNativeSettings, onSelectItem, search, onPageChange, record, account, createRequest, onConsumeCreate, management, commit, api, onOpenChat, onNavigate, onOpenProfileSection, live, refresh, report }) {
+function BotSettings({ selected, embedded, avatarOnly, onSaved, profilePage, onProfilePageChange, onDirtyChange, onBusyChange, onManageBot, onOpenNativeSettings, onSelectItem, search, onPageChange, record, account, createRequest, onConsumeCreate, management, commit, api, onOpenChat, onNavigate, onOpenProfileSection, live, refresh, report }) {
 
   const [dialog, setDialog] = useState(null)
   const [opening, setOpening] = useState(false)
@@ -454,6 +463,9 @@ function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManage
   const bots = selected ? record.bots.filter(item => item.id === selected) : record.bots.filter(matches)
   const groups = selected ? record.groups.filter(item => item.id === selected) : record.groups.filter(matches)
   const selectedItem = selected && (bots[0] ?? groups[0])
+  const inProfileCard = Boolean(profilePage && bots.length)
+  const scopedProfile = selectedItem?.isDefault ? defaultProfile : selectedItem?.id
+  const MemoryPanel = live ? LiveMemory : Memory
   const references = dialog?.type === 'bot'
     ? record.groups.filter(group => resolveGroupMembers(group, record.bots).includes(dialog.item.id)).map(group => group.name)
     : []
@@ -473,10 +485,16 @@ function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManage
   }
 
   async function saveBot(settings, options, editorItem = dialog?.item ?? selectedItem) {
-    const message = editorItem ? 'Bot 设置已保存' : 'Bot 已创建'
-    if (!live) return save('bot', settings, message, options)
+    if (api.current() !== record) return '当前账号已变化，请重新打开。'
+    const message = avatarOnly ? 'Bot 头像已保存' : editorItem ? 'Bot 设置已保存' : 'Bot 已创建'
+    if (!live) {
+      if (!avatarOnly) return save('bot', settings, message, options)
+      const current = record.bots.find(bot => bot.id === settings.id)
+      if (!current) return 'Bot 已移除，无法保存头像。'
+      return save('bot', { ...current, avatar: settings.avatar, appearance: settings.appearance }, message)
+    }
     const { profile, name, description, soul, model, provider, appearance, avatar } = settings
-    const result = await live.saveBot({ profile, name, description, soul, model, provider, appearance, ...options,
+    const result = await live.saveBot({ profile, name, description, soul, ...(!avatarOnly && !inProfileCard && { model, provider }), appearance, ...options,
       ...(avatar !== (editorItem?.avatar ?? '') ? { avatar } : {}),
     })
     if (result.confirmRequired) return result
@@ -575,7 +593,14 @@ function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManage
   }
 
   const detail = selectedItem && <BotSettingsContent key={selectedItem.id} item={selectedItem} kind={bots.length ? 'bot' : 'group'} record={record}
-    management={management} live={live} Editor={BotEditor} GroupEditor={GroupEditor} report={report}
+    management={management} live={live} Editor={inProfileCard ? BotProfileDefinition : BotEditor} GroupEditor={GroupEditor}
+    report={report} avatarOnly={avatarOnly} onSaved={onSaved} profileDefinition={inProfileCard && {
+      page: profilePage, onPageChange: onProfilePageChange,
+      plans: <Tasks compact record={record} selected="all" management={management} taskProfile={scopedProfile}
+        persist={(patch, message) => commit(() => api.updateManagement(patch), message)} api={api} live={live} refresh={refresh} report={report} />,
+      memory: <MemoryPanel compact record={record} management={management} profile={scopedProfile} account={account}
+        persist={(patch, message) => commit(() => api.updateManagement(patch), message)} live={live} report={report} />,
+    }}
     onSave={bots.length ? saveBot : saveGroup} onDirtyChange={onDirtyChange} onBusyChange={onBusyChange}
     onOpenProfileSection={onOpenProfileSection} onOpenNativeSettings={onOpenNativeSettings} />
   if (embedded) return detail ?? <Empty>{"该 Bot 或群聊已移除。"}</Empty>
@@ -632,7 +657,7 @@ function BotSettings({ selected, embedded, onDirtyChange, onBusyChange, onManage
   </Frame>
 }
 
-function TaskEditor({ item, record, taskProfile, roomDeliveries, onClose, onSave, onBlueprintCreated, live }) {
+function TaskEditor({ item, record, taskProfile, fixedProfile, roomDeliveries, onClose, onSave, onBlueprintCreated, live }) {
   const requestId = useRef(null)
   const [profile, setProfile] = useState(item?.profile ?? taskProfile ?? defaultProfile)
   const [delivery, setDelivery] = useState(item?.deliver ?? 'local')
@@ -666,7 +691,8 @@ function TaskEditor({ item, record, taskProfile, roomDeliveries, onClose, onSave
     }, error => { if (current) setTemplates({ profile: nativeProfile, error: error.message, items: [] }) })
     return () => { current = false }
   }, [live, nativeProfile, item])
-  const blueprint = templates?.profile === nativeProfile && templates.items.find(row => row.key === templateKey)
+  const profileTemplates = templates?.profile === nativeProfile ? templates?.items ?? [] : []
+  const blueprint = profileTemplates.find(row => row.key === templateKey)
   if (blueprint) return <NativeTaskBlueprintDialog key={nativeProfile + ':' + blueprint.key} live={live} profile={nativeProfile} blueprint={blueprint}
     targets={targets} rooms={roomDeliveries} onClose={() => setTemplateKey('')} onCreated={async () => { await onBlueprintCreated(); onClose() }} />
 
@@ -709,7 +735,7 @@ function TaskEditor({ item, record, taskProfile, roomDeliveries, onClose, onSave
     })
   }} submit={item ? '保存' : '创建'}>
     {live?.native && !item && <label>从模板开始<select value={templateKey} onChange={event => setTemplateKey(event.target.value)}>
-      <option value="">自定义任务</option>{(templates?.profile === nativeProfile ? templates.items : []).map(row => <option key={row.key} value={row.key}>{row.title}</option>)}
+      <option value="">自定义任务</option>{profileTemplates.map(row => <option key={row.key} value={row.key}>{row.title}</option>)}
     </select>{templates?.error && <small role="alert">模板读取失败：{templates.error}</small>}</label>}
     <Field label="任务名称" name="name" defaultValue={item?.name} placeholder="例如 每周项目摘要" maxLength={100} required autoFocus />
     {scriptOnly ? <><p>此任务只运行已保存脚本，不调用模型。编辑计划会保留脚本与原执行方式。</p><pre>{item.script}</pre></>
@@ -724,7 +750,10 @@ function TaskEditor({ item, record, taskProfile, roomDeliveries, onClose, onSave
     </div>
     <small>支持 0 9 * * 1、every 2h、in 30m 或 ISO 日期时间。</small>
     <div className="management-field-pair">
-      {live && item ? <Field label="所属 Profile" value={record.bots.find(bot => bot.id === item.profile)?.name ?? '默认 Profile'} readOnly />
+      {fixedProfile ? <>
+        <input type="hidden" name="profile" value={profile} />
+        <Field label="所属 Profile" value={record.bots.find(bot => bot.id === profile)?.name ?? '默认 Profile'} readOnly />
+      </> : live && item ? <Field label="所属 Profile" value={record.bots.find(bot => bot.id === item.profile)?.name ?? '默认 Profile'} readOnly />
         : <Profiles bots={record.bots} name="profile" value={profile} onChange={event => {
           setProfile(event.target.value)
           setInventory(null)
@@ -805,9 +834,11 @@ function LiveTaskHistory({ live, task, onOpenTaskSession }) {
   })
 }
 
-function Tasks({ record, selected, management, persist, api, report, openGroups, onGroupOpenChange, taskProfile, onPageChange, onSelectItem, onOpenTaskSession, live, refresh }) {
+function Tasks({ compact, record, selected, management, persist, api, report, openGroups, onGroupOpenChange, taskProfile, onPageChange, onSelectItem, onOpenTaskSession, live, refresh }) {
   const [dialog, setDialog] = useState(null)
   const [loadState, setLoadState] = useState(null)
+  const [compactOpen, setCompactOpen] = useState(false)
+  const [compactHistory, setCompactHistory] = useState({})
   const [busy, setBusy] = useState({})
   const inventorySequence = useRef(0)
   const close = () => setDialog(null)
@@ -890,22 +921,34 @@ function Tasks({ record, selected, management, persist, api, report, openGroups,
     if (error || !result.ok) report(error || row.detail, true)
   }
 
-  return <Frame live={live} icon="clock" title="定时任务" description="配置执行计划、工作目录和投递方式，查看每次运行的结果。"
+  const createTask = <button type="button" className={compact ? "secondary" : "primary"} onClick={() => setDialog({ kind: 'edit' })}><Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />{compact ? '新建计划' : '新建任务'}</button>
+  const nextTask = tasks.filter(task => task.enabled && task.nextRun).sort((a, b) => new Date(a.nextRun) - new Date(b.nextRun))[0]
+  return <Frame compact={compact} live={live} icon="clock" title="定时任务" description="配置执行计划、工作目录和投递方式，查看每次运行的结果。"
     actions={<>
-      <label className="management-select">按 Profile 筛选<select value={taskProfile ?? ''} onChange={event => {
+      {!compact && <label className="management-select">按 Profile 筛选<select value={taskProfile ?? ''} onChange={event => {
         onPageChange({ taskProfile: event.target.value || null })
         if (selected && selected !== 'all') onSelectItem('all')
       }}>
         <option value="">所有 Profile</option><option value={defaultProfile}>默认 Profile</option>
         {record.bots.map(bot => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
-      </select></label>
-      <button className="primary" onClick={() => setDialog({ kind: 'edit' })}><Icon name="add" size={/* @ai-token sys.icon.size.15 */ 15} />新建任务</button>
+      </select></label>}
+      {createTask}
     </>}>
+    {compact && <div className="bot-profile-plan-summary">
+      <strong>计划</strong>
+      <small>{loadState ? '读取失败' : live && loadState === null ? '正在读取…' : nextTask
+        ? nextTask.name + ' · ' + dateLabel(nextTask.nextRun)
+        : tasks.length ? tasks[0].name + (tasks.length > 1 ? ' · 共 ' + tasks.length + ' 项' : '') : '暂无计划'}</small>
+      {createTask}
+      {tasks.length > 0 && <button type="button" className="secondary" aria-expanded={compactOpen} onClick={() => setCompactOpen(value => !value)}>
+        {compactOpen ? '收起' : '查看计划'}
+      </button>}
+    </div>}
     {loadState && live && <p role="alert" className="management-error">{loadState}</p>}
-    {tasks.length ? tasks.map(task => {
+    {(!compact || compactOpen) && (tasks.length ? tasks.map(task => {
       const profile = record.bots.find(bot => bot.id === task.profile)
       const hasProfile = task.profile === defaultProfile || !!profile
-      const historyOpen = openGroups?.[task.id] ?? (selected === task.id)
+      const historyOpen = (compact ? compactHistory[task.id] : openGroups?.[task.id]) ?? (selected === task.id)
       const running = live && Boolean(task.running || busy[task.id + ':run'])
       const completed = live && task.state === 'completed'
       const badge = running ? '运行中' : completed ? '已完成' : task.enabled ? '已启用' : '已暂停'
@@ -944,7 +987,8 @@ function Tasks({ record, selected, management, persist, api, report, openGroups,
         <details className="management-history" open={historyOpen}>
           <summary onClick={event => {
             event.preventDefault()
-            onGroupOpenChange(task.id, !historyOpen)
+            if (compact) setCompactHistory(current => ({ ...current, [task.id]: !historyOpen }))
+            else onGroupOpenChange(task.id, !historyOpen)
           }}>运行历史 {!live && <span>{task.history.length}</span>}</summary>
           {live ? historyOpen && <LiveTaskHistory live={live} task={task} onOpenTaskSession={onOpenTaskSession} /> : <>
             {task.runs > 0 && <Empty>旧版模拟运行 {task.runs} 次，无明细记录。</Empty>}
@@ -955,8 +999,8 @@ function Tasks({ record, selected, management, persist, api, report, openGroups,
         </details>
       </Panel>
     }) : !live ? <Empty>暂无任务。新建任务后，可手动模拟运行并查看历史。</Empty>
-      : loadState === null ? <Empty>正在读取定时任务…</Empty> : !loadState && <Empty>暂无任务。</Empty>}
-    {dialog?.kind === 'edit' && <TaskEditor item={dialog.item} record={record} taskProfile={taskProfile} roomDeliveries={roomDeliveries} onClose={close}
+      : loadState === null ? <Empty>正在读取定时任务…</Empty> : !loadState && <Empty>暂无任务。</Empty>)}
+    {dialog?.kind === 'edit' && <TaskEditor item={dialog.item} record={record} taskProfile={taskProfile} fixedProfile={compact} roomDeliveries={roomDeliveries} onClose={close}
       onBlueprintCreated={async () => { await readTasks(); report('模板任务已创建') }}
       live={live} onSave={live ? saveLive : item => save(item, '定时任务已保存')} />}
     {dialog?.kind === 'remove' && <Confirm title={'删除 ' + dialog.item.name + '？'} onClose={close}
@@ -1179,14 +1223,14 @@ function Skills({ record, management, selected, persist, onSelectItem, profile, 
   </Frame>
 }
 
-function Memory({ record, management, selected, persist, account, profile, setProfile }) {
+function Memory({ compact, record, management, selected, persist, account, profile, setProfile }) {
   const [dialog, setDialog] = useState(null)
   const memory = getProfileMemory(account.id, management, profile)
   const close = () => setDialog(null)
   const nodes = selected && selected !== 'all' ? memory.nodes.filter(node => node.type === selected) : memory.nodes
   const save = (patch, message) => persist({ memory: { ...management.memory, [profile]: { ...memory, ...patch } } }, message)
 
-  return <Frame icon="book" title="记忆与学习" description="检查 Agent 记住了什么，管理记忆写入和技能整理。"
+  return <Frame compact={compact} icon="book" title="记忆与学习" description="检查 Agent 记住了什么，管理记忆写入和技能整理。"
     actions={<Profiles bots={record.bots} label="管理 Profile" value={profile} onChange={event => setProfile(event.target.value)} />}>
     <Panel title="记忆设置">
       {memorySettings.map(([id, label, description]) => <Entry key={id} title={label} subtitle={description}>

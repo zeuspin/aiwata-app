@@ -94,7 +94,7 @@ function SpeakerAvatar({ bot, name, user, account, active = false, animate = act
   </span>
 }
 
-function Message({ message, index, bot, members, account, conversational, showAvatar, animateAvatar = false, avatarState = 'idle', onPreview, onFilePreview, onRetry, canRetry, onReply, onAttachmentPreview }) {
+function Message({ message, index, bot, members, account, conversational, showAvatar, onPreview, onFilePreview, onRetry, canRetry, onReply, onAttachmentPreview }) {
   const speaker = message.memberId ? members.find(member => member.id === message.memberId) : bot
   const user = message.role === 'user'
   const author = user ? (message.scheduled ? message.author || '定时任务' : '你') : message.author || speaker?.name || 'Bot'
@@ -103,7 +103,7 @@ function Message({ message, index, bot, members, account, conversational, showAv
     title="引用回复" aria-label={'引用回复 ' + (message.author ?? (user ? '你的消息' : author))} onClick={() => onReply(message.id)}>
     {conversational ? <Icon name="reply" /> : '引用回复'}</button>
   return <article className={'message ' + message.role + (conversational ? ' conversation-message' : '')} data-message-index={index} data-speaker-avatar={conversational ? showAvatar : undefined}>
-    {conversational && showAvatar && <SpeakerAvatar bot={speaker} name={author} user={user} account={account} animate={animateAvatar} state={avatarState} />}
+    {conversational && showAvatar && <SpeakerAvatar bot={speaker} name={author} user={user} account={account} />}
     <div className="message-content">
     {conversational ? <header className="conversation-message-heading">
       <strong>{author}</strong>
@@ -165,7 +165,6 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
   const run = chat.agentRun
   const request = run?.request
   const showCurrentResponse = Boolean(chat.pending && !chat.gatewayUnknown && !run?.room?.paused)
-  const latestBotReply = chat.messages.findLastIndex(message => message.role === 'agent')
 
   useLayoutEffect(() => {
     if (!visible) return
@@ -221,14 +220,11 @@ export function Transcript({ chat, project, bot, group, members = [], account, v
       : <div className="message-list">{chat.messages.map((message, index) =>
           <Message key={message.id ?? index} message={message} index={index} onRetry={onRetry}
             bot={bot} members={members} account={account} conversational={Boolean(bot || group)}
-            showAvatar={Boolean(group) || message.role === 'user' || (!showCurrentResponse && index === latestBotReply)}
-            avatarState={bot && !group && index === latestBotReply ? botPresence(chat) : 'idle'}
-            animateAvatar={Boolean(bot && !group && !chat.gatewayUnknown && index === latestBotReply)}
+            showAvatar={Boolean(group) || message.role === 'user'}
             onPreview={onPreview} onFilePreview={onFilePreview} onAttachmentPreview={onAttachmentPreview} onReply={onReply}
             canRetry={!chat.pending && (group ? message.id === chat.lastInput?.runId + ':outcome'
               : index === chat.messages.length - 1 && !hasPromptContent({ text: chat.draft, attachments: chat.attachments }))} />)}
-        {showCurrentResponse && (group ? <GroupTyping members={members} chat={chat} /> : <article className={'message agent' + (bot ? ' conversation-message' : '')}>
-          {bot && <SpeakerAvatar bot={bot} name={bot.name} active state={botPresence(chat)} />}
+        {showCurrentResponse && (group ? <GroupTyping members={members} chat={chat} /> : <article className={'message agent' + (bot ? ' conversation-message' : '')} data-speaker-avatar={bot ? false : undefined}>
           <div className="message-content">
           {bot && <header className="conversation-message-heading"><strong>{bot.name}</strong><small>{botPresenceLabels[botPresence(chat)]}</small></header>}
           <div className="message-body">

@@ -3,7 +3,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { defaultProfile, memorySettings, memoryTypes } from './management.mjs'
 import { Badge, Confirm, Dialog, Empty, Entry, Frame, Panel, Profiles, Text, dateLabel, valueOf } from './management-ui.jsx'
 
-export default function LiveMemory({ record, selected, profile, setProfile, live, report }) {
+export default function LiveMemory({ record, selected, profile, setProfile, live, report, compact }) {
   const [dialog, setDialog] = useState(null)
   const [snapshot, setSnapshot] = useState(null)
   const [revision, reload] = useState(0)
@@ -52,12 +52,13 @@ export default function LiveMemory({ record, selected, profile, setProfile, live
   const countsText = ({ checked, marked_stale, archived, reactivated }) =>
     '检查 ' + checked + ' 项，标记待整理 ' + marked_stale + ' 项，归档 ' + archived + ' 项，恢复 ' + reactivated + ' 项。'
 
-  return <Frame live icon="book" title="记忆与学习" description="查看 Agent 在此 Profile 学到的内容，审阅记忆写入。"
+  return <Frame compact={compact} live icon="book" title="记忆与学习" description="查看 Agent 在此 Profile 学到的内容，审阅记忆写入。"
     actions={<>
       <Profiles bots={record.bots} label="管理 Profile" value={profile} onChange={event => { close(); setProfile(event.target.value) }} />
       <button className="secondary" disabled={Boolean(busy)} onClick={refresh}>刷新</button>
     </>}>
     {error && <p role="alert" className="management-error">{error}</p>}
+    {compact && error && <button type="button" className="secondary" onClick={refresh}>重新读取记忆</button>}
     {!data && !error && <Empty>正在读取 Profile 的记忆和学习记录…</Empty>}
     {data && <>
       <Panel title="记忆设置">

@@ -95,9 +95,9 @@ test('native timestamps survive room projection and ambiguous model text never i
   assert.ok(!ordinary.includes('非验收状态'))
 })
 
-test('private bot and active group members use their own avatars; project transcripts retain their layout', async () => {
+test('active group members use their own avatars and other transcripts retain their layout', async () => {
   const privateChat = await render([{ role: 'agent', text: '你好' }], { group: undefined, bot: members[0] })
-  assert.match(privateChat, /aria-label="文案助手的头像"/)
+  assert.doesNotMatch(privateChat, /aria-label="文案助手的头像"/)
   const active = await render([{ role: 'user', text: '开始' }], {
     chat: { messages: [{ role: 'user', text: '开始' }], pending: true, agentRun: { room: { statuses: { 'bot:designer': 'running' } } } },
   })
@@ -108,7 +108,7 @@ test('private bot and active group members use their own avatars; project transc
 })
 
 
-test('private chat keeps its avatar on the latest Bot reply even when the last message is from the user', async () => {
+test('private chat shows no Bot avatars in any historical reply', async () => {
   const html = await render([
     { id: 'old', role: 'agent', text: 'Earlier reply', status: 'complete' },
     { id: 'ask', role: 'user', text: 'Continue' },
@@ -116,26 +116,17 @@ test('private chat keeps its avatar on the latest Bot reply even when the last m
     { id: 'new-input', role: 'user', text: 'Follow-up' },
   ], { group: undefined, bot: members[0] })
   const rows = [...html.matchAll(/<article[^>]*data-message-index="(\d+)"[^>]*>(.*?)<\/article>/gs)]
-  assert.deepEqual(rows.filter(([, , body]) => body.includes('data-bot-state')).map(([, index]) => Number(index)), [2])
+  assert.ok(rows.every(([, , body]) => !body.includes('data-bot-state')))
   assert.match(html, /Earlier reply/)
   assert.match(html, /Follow-up/)
 })
 
-test('a new private response moves the only Bot avatar from history to the current response before text arrives', async () => {
+test('a new private response keeps its status with no avatar before text arrives', async () => {
   const messages = [{ id: 'old', role: 'agent', text: 'Earlier reply', status: 'complete' }, { role: 'user', text: 'Start again' }]
   const html = await render(messages, { group: undefined, bot: members[0],
     chat: { messages, pending: { runId: 'next' }, agentRun: { text: '', tools: {}, children: {} } } })
-  assert.equal((html.match(/data-bot-state=/g) ?? []).length, 1)
-  assert.match(html, /data-bot-state="thinking"/)
+  assert.doesNotMatch(html, /data-bot-state=/)
+  assert.match(html, /思考中/)
   const old = html.match(/data-message-index="0"[^>]*>(.*?)<\/article>/s)[1]
   assert.ok(!old.includes('conversation-avatar'))
-})
-
-
-test('the latest private avatar reflects background work after the foreground response settles', async () => {
-  const messages = [{ role: 'agent', text: 'Earlier', status: 'complete' }, { role: 'agent', text: 'Continuing in the background', status: 'complete' }]
-  const html = await render(messages, { group: undefined, bot: members[0],
-    chat: { messages, draft: '', attachments: [], pending: null, activity: { background: true } } })
-  assert.equal((html.match(/data-bot-state="working"/g) ?? []).length, 1)
-  assert.ok(!html.includes('data-bot-still="true"'))
 })

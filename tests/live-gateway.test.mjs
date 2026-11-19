@@ -688,6 +688,31 @@ test('Bot routes only resolve physical profiles inside the active account', asyn
   await assert.rejects(() => ownedBotHome(lin, 'default'))
 })
 
+test('legacy avatar saves omit unchanged profile text while preserving edited text', async t => {
+  const { saveGatewayBot } = await import('../scripts/live-aiwata-bots.mjs')
+  const scratch = await mkdtemp(join(tmpdir(), 'aiwata-bot-look-'))
+  t.after(() => rm(scratch, { recursive: true, force: true }))
+  const home = await realpath(scratch)
+  const path = join(home, 'profiles', 'writer')
+  await mkdir(path, { recursive: true })
+  const updates = []
+  const connection = { async call(method, body) {
+    if (method === 'profiles.list') return { profiles: [{ name: 'writer', path }] }
+    assert.equal(method, 'profiles.configure')
+    updates.push(body)
+    return { ok: true }
+  } }
+  const settings = { profile: 'writer', name: 'Writer', revision: 0, desktopRevision: 0,
+    description: 'Original description', originalDescription: 'Original description',
+    soul: 'Original instructions', originalSoul: 'Original instructions', appearance: { shape: 'circle' } }
+  await saveGatewayBot(connection, home, settings, new Map())
+  assert.equal(Object.hasOwn(updates[0], 'description'), false)
+  assert.equal(Object.hasOwn(updates[0], 'soul'), false)
+  await saveGatewayBot(connection, home, { ...settings, description: '', soul: 'New instructions' }, new Map())
+  assert.equal(updates[1].description, '')
+  assert.equal(updates[1].soul, 'New instructions')
+})
+
 test('a replacement Bot with the same profile name cannot inherit deleted chat drafts or tasks', () => {
   const workspace = createWorkspace(null, null, { live: true })
   workspace.login('lin')

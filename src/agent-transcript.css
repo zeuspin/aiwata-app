@@ -48,7 +48,7 @@
   background: var(--avatar, var(--sidebar)); color: var(--surface); font-size: var(--ai-comp-workbench-agent-transcript-conversation-user-avatar-font-size); font-weight: var(--ai-comp-workbench-agent-transcript-conversation-user-avatar-font-weight);
 }
 .message-content, .message-body { min-width: 0; }
-.private-conversation .message.agent[data-speaker-avatar="false"] > .message-content { grid-column: 2; }
+.private-conversation .message.agent.conversation-message { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .private-conversation .message.agent[data-speaker-avatar="false"] .conversation-message-heading > strong { display: none; }
 .conversation-message-heading { display: flex; align-items: center; gap: var(--ai-comp-workbench-agent-transcript-conversation-message-heading-gap); min-height: var(--ai-comp-workbench-agent-transcript-conversation-message-heading-min-height); margin-bottom: var(--ai-comp-workbench-agent-transcript-conversation-message-heading-margin-bottom); }
 .conversation-message-heading > strong { font-size: var(--ai-comp-workbench-agent-transcript-conversation-message-heading-strong-font-size); font-weight: var(--ai-comp-workbench-agent-transcript-conversation-message-heading-strong-font-weight); overflow-wrap: anywhere; }

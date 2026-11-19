@@ -5,10 +5,10 @@ import { appearanceChange, appearanceStyle } from './desktop-appearance.mjs'
 import { applyDocumentTheme, readDesignHexColor } from './design/theme-runtime.mjs'
 import { browserState, closeToolInstances, terminalInstanceId, toolChat, toolEditsFor, toolType } from './tool-tabs.mjs'
 import { browserTabInfo } from './browser-tab.mjs'
-import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Composer } from './chat.jsx'
 import { AgentQueue, AgentRequest, Transcript } from './agent-transcript.jsx'
-import { BotConversationHeader, DiscussionPause } from './bot-conversation.jsx'
+import { BotConversationHeader, BotProfileCard, DiscussionPause } from './bot-conversation.jsx'
 import { NativeArtifactPreview } from './native-artifacts.jsx'
 import { AttachmentPreview } from './attachment-preview.jsx'
 import { hasPromptContent } from './local-attachments.mjs'
@@ -155,6 +155,16 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const [creating, setCreating] = useState(false)
   const [botCreateRequest, setBotCreateRequest] = useState(null)
   const [botSettingsId, setBotSettingsId] = useState(null)
+  const [botAvatarOnly, setBotAvatarOnly] = useState(false)
+  const [botProfileOpen, setBotProfileOpen] = useState(false)
+  const [botProfilePage, setBotProfilePage] = useState('overview')
+  const [botProfileVersion, setBotProfileVersion] = useState(0)
+  const [botProfileDirty, setBotProfileDirty] = useState(false)
+  const [botProfileBusy, setBotProfileBusy] = useState(false)
+  const botProfileId = useId()
+  const botProfileTrigger = useRef(null)
+  const restoreBotProfileFocus = useRef(false)
+  const botProfileClosing = useRef(false)
   const botSettingsTrigger = useRef(null)
   const [botSettingsDirty, setBotSettingsDirty] = useState(false)
   const [botSettingsBusy, setBotSettingsBusy] = useState(false)
@@ -285,13 +295,19 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     : chat && (bot || group) ? [liveBrowserTool] : noTools
   const activeTool = availableTools.includes(toolType(chat, chat?.tool)) ? chat.tool : null
   const toolTabs = (chat?.tabs ?? []).filter(id => availableTools.includes(toolType(chat, id)))
-  const toolView = activeTool ? chat.view : 'hidden'
+  const toolView = activeTool ? (chat.view ?? 'hidden') : 'hidden'
   const sidebar = !chatFocus && (record.navigation?.sidebarOpen ?? !narrow)
   const view = chatFocus ? 'hidden' : viewAtWidth(toolView, viewport, sidebar)
   const full = view === 'full'
   const split = view === 'split'
   const replacesChat = view === 'replace'
   const contextVisible = !full && sidebar
+  useLayoutEffect(() => { setBotProfileOpen(false) }, [account.id, bot?.id])
+  useLayoutEffect(() => {
+    if (botProfileOpen || !restoreBotProfileFocus.current) return
+    restoreBotProfileFocus.current = false
+    botProfileTrigger.current?.focus()
+  }, [botProfileOpen])
   const floatingSection = !full && (!contextVisible || railPanel?.section === 'archive') ? railPanel?.section : null
   const botSidebar = section === 'bots'
   // An expanded sidebar can be narrower than 160px when the window itself is narrow.
@@ -301,6 +317,9 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   const fitted = fitPanels(botSidebar ? { ...panels, side: botSidebarWidth } : panels, viewport, contextVisible, split, sidebarMinimum)
   const toolsWidth = replacesChat ? viewport - railWidth - fitted.side : fitted.tools
   const visibleTools = view !== 'hidden'
+  const botProfileLayout = bot && botProfileOpen && !full && !replacesChat
+    ? split ? 'overlay' : viewport - railWidth - fitted.side >= 540 ? 'docked' : 'stacked'
+    : undefined
   const observesTool = tool => Boolean(live && visibleTools && (toolType(chat, activeTool) === tool || (preview?.chatId === chatId && toolType(chat, preview?.tool) === tool)))
   const liveFiles = useLiveFiles({ live: toolLive, chat, project, visible: observesTool(liveFileTool), api, refresh, report })
   const liveGit = useLiveGit({ live: toolLive, chat, project, visible: observesTool(liveGitTool), api, refresh })
@@ -431,6 +450,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   function go(route) {
+    if ((route.section !== section || route.chatId !== chatId || route.fresh) && !closeBotProfile(false)) return false
     const isChatRoute = chatSections.includes(route.section)
     if (!route.chatId) setChatFocus(false)
     viewedChat.current = route.fresh ? record.newChatDraft?.id : isChatRoute ? route.chatId : null
@@ -456,6 +476,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   function select(id, targetSection = conversationSection(record, id)) {
+    if ((id !== chatId || targetSection !== section) && !closeBotProfile(false)) return
     if (id) api.openChat(id)
     go({ section: targetSection, chatId: id, item: null })
   }
@@ -475,6 +496,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   function newChat(projectId) {
+    if (!closeBotProfile(false)) return
     if (api.openChatDraft(projectId)) go({ section: 'projects', chatId: null, item: null, fresh: true })
   }
 
@@ -521,6 +543,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   function closeChatTabs(id, strategy) {
+    if (!closeBotProfile(false)) return
     api.closeChats(id, strategy)
     reconcileChatRoute()
   }
@@ -716,8 +739,9 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     setCreating({ chatId })
   }
 
-  function openBotSettings(id) {
-    botSettingsTrigger.current = document.activeElement
+  function openBotSettings(id, avatarOnly = false, trigger = document.activeElement) {
+    botSettingsTrigger.current = trigger
+    setBotAvatarOnly(avatarOnly)
     setMenu('')
     setContextAction(null)
     closeRailPanel()
@@ -729,9 +753,40 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   function closeBotSettings() {
     if (botSettingsBusy) return false
     if (botSettingsDirty && !window.confirm('有未保存的修改，确定放弃吗？')) return false
+    dismissBotSettings()
+    return true
+  }
+
+  function dismissBotSettings() {
+    if (botProfileOpen && botSettingsId === bot?.id) setBotProfileVersion(value => value + 1)
     setBotSettingsId(null)
     setBotSettingsDirty(false)
+    setBotSettingsBusy(false)
+  }
+
+  function mayLeaveBotProfile() {
+    return !botProfileBusy && (!botProfileDirty || window.confirm('有未保存的 Bot 定义，确定放弃吗？'))
+  }
+
+  function openBotProfile() {
+    botProfileClosing.current = false
+    setBotProfilePage('overview')
+    setBotProfileOpen(true)
+  }
+
+  function closeBotProfile(restoreFocus = true) {
+    if (!botProfileOpen || botProfileClosing.current) return true
+    if (!mayLeaveBotProfile()) return false
+    botProfileClosing.current = true
+    restoreBotProfileFocus.current = restoreFocus
+    setBotProfileOpen(false)
     return true
+  }
+
+  function openSettingsFromProfile(event, avatarOnly) {
+    if (!mayLeaveBotProfile()) return
+    if (botProfileDirty) setBotProfileVersion(value => value + 1)
+    openBotSettings(bot.id, avatarOnly, event.currentTarget)
   }
 
   function leaveBotSettings(action) {
@@ -743,6 +798,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
   }
 
   function openProfileSection(target, profile) {
+    if (!closeBotProfile(false)) return
     if (target === 'tasks') api.updateNavigationModule(target, { taskProfile: profile, item: 'all' })
     else api.updateNavigationModule(target, { profile })
     go(restoreRoute(record, target))
@@ -1250,14 +1306,21 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
 
   const NativePet = nativePrimary.current?.PetSurface
   return <div className={'window ' + (full ? 'full-view ' : '') + (dragging ? 'dragging' : '')}
-    style={style} data-view={view} onPointerDown={event => {
+    style={style} data-view={view} onClickCapture={event => {
+      if (!botProfileOpen || botSettingsId || full || replacesChat || event.target.closest('.bot-profile-card, dialog, [data-pane-toggle]')) return
+      if (!visibleTools && event.target.closest('.chat-pane')) return
+      if (!closeBotProfile(false)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }} onPointerDown={event => {
       if (menu && !event.target.closest('.rail, .title-tool-region')) setMenu('')
       if (floatingSection && !event.target.closest('#rail-panel, .rail-panel-trigger, .tab-context-menu, dialog')) closeRailPanel()
     }}>
     <header className="titlebar">
       {contextVisible && <span className="title-divider sidebar-divider" aria-hidden="true" />}
       {split && <span className="title-divider tool-divider" aria-hidden="true" />}
-      {!full && <IconButton icon="sidebar" label={contextVisible ? '收起侧栏' : '展开侧栏'}
+      {!full && <IconButton icon="sidebar" data-pane-toggle label={contextVisible ? '收起侧栏' : '展开侧栏'}
         aria-expanded={contextVisible} onClick={toggleSidebar} />}
       {window.aiwataNativeRuntime && <span className="native-titlebar-drag" aria-hidden="true" />}
       {!full && <div className="title-spacer" />}
@@ -1286,7 +1349,7 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         {visibleTools && <IconButton icon={full ? 'split' : 'full'}
           label={full ? '恢复分栏' : '进入完整视图'}
           onClick={() => setView(full ? 'split' : 'full')} />}
-        <IconButton icon="tools" label={visibleTools ? '隐藏工具' : '打开工具'} aria-expanded={visibleTools}
+        <IconButton icon="tools" data-pane-toggle label={visibleTools ? '隐藏工具' : '打开工具'} aria-expanded={visibleTools}
           onClick={() => setView(visibleTools ? 'hidden' : 'split')} />
         </div>
       </div>}
@@ -1310,68 +1373,79 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
         <aside className="context" aria-label="上下文侧栏">{renderContext(section, contextVisible)}</aside>
         {contextVisible && separator('left')}
       </div>
-      {composerChat ? <main data-tour="composer" className="chat-pane" aria-label={group ? '群聊' : bot ? 'Bot 私聊' : draftChat ? '新建会话' : undefined} inert={replacesChat}>
-        {live && gateway.status !== 'connected' && <p className="live-connection" role="status">
-          {gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</p>}
-        {live && gateway.desktopRequests?.map(request => <DesktopRequestCard key={(request.profile ?? '') + ':' + request.id} request={request}
-          onRespond={respondDesktopChoice} disabled={gateway.desktopRequestBusy === request.id} error={gateway.desktopRequestError} />)}
-        {live && !group && composerChat.connectionRequest && <LiveConnectionRequest key={composerChat.id + ':' + composerChat.connectionRequest.op_id}
-          live={live} chat={composerChat} request={composerChat.connectionRequest} report={report} onUpdate={snapshot => {
-            if (api.current() !== record || api.getChat(composerChat.id) !== composerChat) return
-            const next = mergeConnectionRequest(composerChat.connectionRequest, snapshot)
-            if (next !== composerChat.connectionRequest) { api.changeChat(composerChat.id, { connectionRequest: next }); refresh() }
-          }} />}
-        {live && draftChat && !draftChat.gatewayModelPick && gateway.model?.error && <p className="live-connection management-error" role="alert">
-          模型暂不可用。{gateway.model.error} <button type="button" className="secondary" onClick={gateway.checkModel}>重新检查</button>
-        </p>}
-        {(bot || group) && !full && <BotConversationHeader bot={bot} group={group} chat={chat} members={members} account={account}
-          onManage={() => openBotSettings(bot?.id || chat.id)} />}
-        <div className="transcript-region" inert={full}><Transcript key={composerChat.id + ':' + transcriptVersion} chat={composerChat} project={project} bot={bot} group={group} members={members} account={account}
-          visible={!full && !replacesChat} onPositionChange={transcriptPosition => {
-            if (chat && api.current()?.chats[chat.id] === chat) api.changeChat(chat.id, { transcriptPosition })
-          }}
-          onRetry={live && group ? undefined : retryTurn} onPreview={data => openPreview(composerChat.id, data)} onScenario={live ? undefined : fillScenario}
-          onFilePreview={live && availableTools.includes(liveFileTool) ? file => openFilePreview(chat.id, file) : undefined}
-          onReply={group ? messageId => { if (api.setGroupReply(chat.id, messageId)) refresh() } : undefined}
-          onAttachmentPreview={setAttachmentPreview} /></div>
-        {group && chat.agentRun?.room?.paused && <DiscussionPause onContinue={continueDiscussion} onStop={stop}
-          disabled={Boolean(live && (rooms.busy || gateway.status !== 'connected'))} />}
-        {live && group && (rooms.error || chat.roomError || !chat.roomReady) && <p className="live-connection" role="status">
-          {rooms.error || chat.roomError || (chat.roomReady === false ? 'AIWATA 群聊驱动暂不可用。' : '正在读取群聊驱动状态…')}
-        </p>}
-        {live && group && chat.roomApprovals?.map(request => <AgentRequest key={request.params.task_id + ':' + request.id}
-          request={request} onRespond={respondAgent} disabled={Boolean(rooms.busy || gateway.status !== 'connected')} />)}
-        {live && group && chat.roomAttempts?.map(attempt => <section className="agent-request" key={attempt.kind + ':' + attempt.task_id}>
-          <h3>{attempt.memberName}的任务待处理</h3>
-          <button type="button" className="secondary" disabled={Boolean(rooms.busy || gateway.status !== 'connected')} onClick={() => {
-            const { member_id, task_id, execution_generation, kind } = attempt
-            void rooms.control(chat.id, kind === 'retry' ? 'groups.retry' : 'groups.discard', { member_id, task_id, execution_generation })
-          }}>{attempt.kind === 'retry' ? '重试该成员' : '结束该成员的中断任务'}</button>
-        </section>)}
-        {live && chat?.gatewayUnknown && <section className="agent-request" aria-label="恢复中断的请求">
-          <h3>上次请求因网关重启或异常中断</h3>
-          <p>已保存的消息会保留。结束这次请求后，可以继续发送。</p>
-          <button className="secondary" type="button" disabled={gateway.status !== 'connected' || gateway.resolving === chat.id}
-            onClick={() => void gateway.resolveInterrupted(chat)}>结束中断的请求</button>
-        </section>}
-        {chat?.agentRun?.request && (full
-          ? <button type="button" className="secondary agent-return" onClick={() => setView('hidden')}>查看待处理请求</button>
-          : <AgentRequest key={chat.agentRun.request.id} request={chat.agentRun.request} onRespond={respondAgent} />)}
-        {chat && <AgentQueue key={'queue:' + chat.id} chat={chat} onEdit={updateQueue} onResume={resumeQueue} />}
-        <Composer key={'composer:' + composerChat.id} chat={composerChat} project={project} bot={bot} group={group} members={members} compact={full} api={api} refresh={refresh}
-          autoFocus={Boolean(draftChat)} live={Boolean(live)} liveModel={gateway.model?.model} voiceService={live}
-          modelService={live} onSelectModel={(selection, confirmation) => gateway.selectModel(composerChat, selection, confirmation)}
-          completionService={group ? undefined : live} completionCwd={project?.folder}
-          approvalService={live} approvalConnected={gateway.status === 'connected'}
-          modelDisabled={Boolean(gateway.status !== 'connected' || gateway.sending || gateway.changingModel || composerChat.pending ||
-            composerChat.gatewaySubmission || (composerChat.gatewayProfile && !composerChat.gatewayStoredId))}
-          sendDisabled={Boolean(live && (gateway.status !== 'connected' || (group ? rooms.busy || rooms.error || !chat.roomReady
-            : gateway.sending || gateway.changingModel || composerChat.pending || (draftChat && !draftChat.gatewayModelPick && gateway.model?.ok === false))))}
-          stopDisabled={Boolean(live && group && (rooms.busy || gateway.status !== 'connected'))}
-          onClearReply={() => { api.setGroupReply(chat.id, null); refresh() }}
-          projectPicker={canChooseProject ? { projects: record.projects, select: chooseComposerProject, create: () => startProject(composerChat.id) } : undefined}
-          send={send} stop={stop} report={report} assets={record.assets} onCommand={onCommand}
-          onAttachmentPreview={setAttachmentPreview} />
+      {composerChat ? <main data-tour="composer" className="chat-pane" data-bot-profile-layout={botProfileLayout}
+        aria-label={group ? '群聊' : bot ? 'Bot 私聊' : draftChat ? '新建会话' : undefined} inert={replacesChat}>
+        <div className="chat-pane-conversation">
+          {live && gateway.status !== 'connected' && <p className="live-connection" role="status">
+            {gateway.status === 'expired' ? '连接已过期，请重新登录' : '正在连接 AIWATA…'}</p>}
+          {live && gateway.desktopRequests?.map(request => <DesktopRequestCard key={(request.profile ?? '') + ':' + request.id} request={request}
+            onRespond={respondDesktopChoice} disabled={gateway.desktopRequestBusy === request.id} error={gateway.desktopRequestError} />)}
+          {live && !group && composerChat.connectionRequest && <LiveConnectionRequest key={composerChat.id + ':' + composerChat.connectionRequest.op_id}
+            live={live} chat={composerChat} request={composerChat.connectionRequest} report={report} onUpdate={snapshot => {
+              if (api.current() !== record || api.getChat(composerChat.id) !== composerChat) return
+              const next = mergeConnectionRequest(composerChat.connectionRequest, snapshot)
+              if (next !== composerChat.connectionRequest) { api.changeChat(composerChat.id, { connectionRequest: next }); refresh() }
+            }} />}
+          {live && draftChat && !draftChat.gatewayModelPick && gateway.model?.error && <p className="live-connection management-error" role="alert">
+            模型暂不可用。{gateway.model.error} <button type="button" className="secondary" onClick={gateway.checkModel}>重新检查</button>
+          </p>}
+          {(bot || group) && !full && <BotConversationHeader bot={bot} group={group} chat={chat} members={members} account={account}
+            profileOpen={bot && botProfileOpen} profileId={botProfileId} triggerRef={bot ? botProfileTrigger : undefined}
+            onManage={bot ? openBotProfile : () => openBotSettings(chat.id)} />}
+          <div className="transcript-region" inert={full}><Transcript key={composerChat.id + ':' + transcriptVersion} chat={composerChat} project={project} bot={bot} group={group} members={members} account={account}
+            visible={!full && !replacesChat} onPositionChange={transcriptPosition => {
+              if (chat && api.current()?.chats[chat.id] === chat) api.changeChat(chat.id, { transcriptPosition })
+            }}
+            onRetry={live && group ? undefined : retryTurn} onPreview={data => openPreview(composerChat.id, data)} onScenario={live ? undefined : fillScenario}
+            onFilePreview={live && availableTools.includes(liveFileTool) ? file => openFilePreview(chat.id, file) : undefined}
+            onReply={group ? messageId => { if (api.setGroupReply(chat.id, messageId)) refresh() } : undefined}
+            onAttachmentPreview={setAttachmentPreview} /></div>
+          {group && chat.agentRun?.room?.paused && <DiscussionPause onContinue={continueDiscussion} onStop={stop}
+            disabled={Boolean(live && (rooms.busy || gateway.status !== 'connected'))} />}
+          {live && group && (rooms.error || chat.roomError || !chat.roomReady) && <p className="live-connection" role="status">
+            {rooms.error || chat.roomError || (chat.roomReady === false ? 'AIWATA 群聊驱动暂不可用。' : '正在读取群聊驱动状态…')}
+          </p>}
+          {live && group && chat.roomApprovals?.map(request => <AgentRequest key={request.params.task_id + ':' + request.id}
+            request={request} onRespond={respondAgent} disabled={Boolean(rooms.busy || gateway.status !== 'connected')} />)}
+          {live && group && chat.roomAttempts?.map(attempt => <section className="agent-request" key={attempt.kind + ':' + attempt.task_id}>
+            <h3>{attempt.memberName}的任务待处理</h3>
+            <button type="button" className="secondary" disabled={Boolean(rooms.busy || gateway.status !== 'connected')} onClick={() => {
+              const { member_id, task_id, execution_generation, kind } = attempt
+              void rooms.control(chat.id, kind === 'retry' ? 'groups.retry' : 'groups.discard', { member_id, task_id, execution_generation })
+            }}>{attempt.kind === 'retry' ? '重试该成员' : '结束该成员的中断任务'}</button>
+          </section>)}
+          {live && chat?.gatewayUnknown && <section className="agent-request" aria-label="恢复中断的请求">
+            <h3>上次请求因网关重启或异常中断</h3>
+            <p>已保存的消息会保留。结束这次请求后，可以继续发送。</p>
+            <button className="secondary" type="button" disabled={gateway.status !== 'connected' || gateway.resolving === chat.id}
+              onClick={() => void gateway.resolveInterrupted(chat)}>结束中断的请求</button>
+          </section>}
+          {chat?.agentRun?.request && (full
+            ? <button type="button" className="secondary agent-return" onClick={() => setView('hidden')}>查看待处理请求</button>
+            : <AgentRequest key={chat.agentRun.request.id} request={chat.agentRun.request} onRespond={respondAgent} />)}
+          {chat && <AgentQueue key={'queue:' + chat.id} chat={chat} onEdit={updateQueue} onResume={resumeQueue} />}
+          <Composer key={'composer:' + composerChat.id} chat={composerChat} project={project} bot={bot} group={group} members={members} compact={full} api={api} refresh={refresh}
+            autoFocus={Boolean(draftChat)} live={Boolean(live)} liveModel={gateway.model?.model} voiceService={live}
+            modelService={live} onSelectModel={(selection, confirmation) => gateway.selectModel(composerChat, selection, confirmation)}
+            completionService={group ? undefined : live} completionCwd={project?.folder}
+            approvalService={live} approvalConnected={gateway.status === 'connected'}
+            modelDisabled={Boolean(gateway.status !== 'connected' || gateway.sending || gateway.changingModel || composerChat.pending ||
+              composerChat.gatewaySubmission || (composerChat.gatewayProfile && !composerChat.gatewayStoredId))}
+            sendDisabled={Boolean(live && (gateway.status !== 'connected' || (group ? rooms.busy || rooms.error || !chat.roomReady
+              : gateway.sending || gateway.changingModel || composerChat.pending || (draftChat && !draftChat.gatewayModelPick && gateway.model?.ok === false))))}
+            stopDisabled={Boolean(live && group && (rooms.busy || gateway.status !== 'connected'))}
+            onClearReply={() => { api.setGroupReply(chat.id, null); refresh() }}
+            projectPicker={canChooseProject ? { projects: record.projects, select: chooseComposerProject, create: () => startProject(composerChat.id) } : undefined}
+            send={send} stop={stop} report={report} assets={record.assets} onCommand={onCommand}
+            onAttachmentPreview={setAttachmentPreview} />
+        </div>
+        {bot && botProfileOpen && <BotProfileCard hidden={full || replacesChat} key={bot.id} id={botProfileId} bot={bot} chat={chat}
+          onEditAvatar={event => openSettingsFromProfile(event, true)}
+          onManage={event => openSettingsFromProfile(event, false)} onClose={() => closeBotProfile()}>
+          <Management key={botProfileVersion} section="bot-settings" embedded selected={bot.id} record={record} api={api}
+            account={account} live={live} refresh={refresh} report={report} profilePage={botProfilePage} onProfilePageChange={setBotProfilePage}
+            onDirtyChange={setBotProfileDirty} onBusyChange={setBotProfileBusy} />
+        </BotProfileCard>}
       </main> : isChat ? <main data-tour="composer" className="chat-pane">
         <div className="welcome workspace-empty">
           <img className="welcome-banner" src="./aiwata-banner.svg" alt="AIWATA" />
@@ -1418,8 +1492,8 @@ export function Workbench({ account, api, refresh, onOffline, live, onLogout, on
     </div>
     {NativePet && nativePrimary.current?.pet && <NativePet controller={nativePrimary.current.pet} snapshot={nativePrimary.current.pet.snapshot()} />}
     {botSettingsId && <BotSettingsDrawer key={botSettingsId} name={settingsBot?.name ?? settingsGroup?.name ?? '已移除'}
-      group={Boolean(settingsGroup)} busy={botSettingsBusy} onClose={closeBotSettings} returnFocus={botSettingsTrigger.current}>
-      <Management section="bot-settings" embedded selected={botSettingsId} record={record} api={api} live={live}
+      group={Boolean(settingsGroup)} avatarOnly={botAvatarOnly} busy={botSettingsBusy} onClose={closeBotSettings} returnFocus={botSettingsTrigger.current}>
+      <Management section="bot-settings" embedded avatarOnly={botAvatarOnly} onSaved={botAvatarOnly ? dismissBotSettings : undefined} selected={botSettingsId} record={record} api={api} live={live}
         account={account} refresh={refresh} report={report} onDirtyChange={setBotSettingsDirty} onBusyChange={setBotSettingsBusy}
         onOpenChat={id => leaveBotSettings(() => select(id))}
         onNavigate={target => leaveBotSettings(() => navigate(target))}

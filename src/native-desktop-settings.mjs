@@ -8,11 +8,23 @@ import { createNativeMessagingFlows } from './native-messaging-flows.mjs'
 const encode=encodeURIComponent
 const unsupported = feature => { throw new Error(`原 AIWATA 暂无可供此界面调用的${feature}接口；需要补齐原生前端契约。`) }
 const dataURL = blob => new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob)})
+const voiceFields = {
+  edge: 'voice', openai: 'voice', elevenlabs: 'voice_id', gemini: 'voice', xai: 'voice_id',
+  minimax: 'voice_id', mistral: 'voice_id', deepinfra: 'voice', kittentts: 'voice', piper: 'voice',
+}
 export function nativeSettings({ rpc, api, host, route, stops, check }) {
   const botCreations=new Map(), uploads=new Map()
   const mcpOAuth=createNativeMcpOAuth({host,rpc,route,stops,check})
   const modelOAuth=createNativeModelOAuth({api,stops,check})
   const messagingFlows=createNativeMessagingFlows({api,stops,check})
+  async function readBotVoice(profile) {
+    const result = await api('/api/config', { profile })
+    const tts = (result.config ?? result).tts ?? {}
+    const provider = String(tts.provider || 'edge').trim().toLowerCase()
+    const configProvider = provider === 'nous' ? 'openai' : provider
+    const field = Object.hasOwn(voiceFields, configProvider) ? voiceFields[configProvider] : null
+    return { provider, configProvider, field, value: field ? String(tts[configProvider]?.[field] ?? '') : '' }
+  }
   return {
     closeNativeAuthorizations: () => Promise.all([mcpOAuth.dispose(),modelOAuth.dispose(),messagingFlows.dispose()]),
     async capability(method, profile, params={}) {
@@ -140,6 +152,22 @@ export function nativeSettings({ rpc, api, host, route, stops, check }) {
     },
     editImage:()=>unsupported('图像编辑'),
     video:async action=>action==='status'?{available:false}:unsupported('视频编辑'),
+    async botVoice(profile, change) {
+      const { provider, configProvider, field, value } = await readBotVoice(profile)
+      if (!change) return { provider, field, value }
+      if (!field || change.provider !== provider || change.previous !== value) {
+        throw new Error('语音引擎或音色已变化，请重新读取。')
+      }
+      if (typeof change.value !== 'string' || !change.value.trim() || change.value.length > 160) {
+        throw new Error('请输入有效音色。')
+      }
+      const saved = await api('/api/config', { profile, method: 'PUT', body: { config: { tts: { [configProvider]: { [field]: change.value } } } } })
+      const next = await readBotVoice(profile)
+      if (saved?.ok === false || saved?.success === false || next.provider !== provider || next.value !== change.value) {
+        throw new Error('未保存音色，请重新读取当前配置。')
+      }
+      return { provider, field, value: next.value }
+    },
     async voiceStatus(profile) {const config=await api('/api/audio/voice-config',{profile});return {available:config.stt?.enabled!==false}},
     async transcribeVoice(profile,audio,signal) { const data=await dataURL(audio);signal?.throwIfAborted();return api('/api/audio/transcribe',{profile,method:'POST',body:{data_url:data,mime_type:audio.type}}) },
     async connector(action,profile,params={}) {
